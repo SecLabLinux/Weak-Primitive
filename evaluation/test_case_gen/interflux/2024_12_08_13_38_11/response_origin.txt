@@ -1,0 +1,63 @@
+<think process>  
+为了使内核函数 `nf_tables_newset` 被调用，首先需要了解这个函数的作用以及它的调用上下文。`nf_tables_newset` 函数属于 `nf_tables` 子系统，是在处理网络数据包过滤规则时创建一个新的规则集。该函数可能与 `iptables` 或 `nftables` 相关，具体的实现是在内核的 `nf_tables_api.c` 文件中。
+
+要触发该函数，我们需要确保用户态程序能够引发与 `nf_tables` 系统相关的操作，通常这涉及到创建、修改或删除过滤规则。用户态程序通常通过 `libnftnl` 或直接调用 `nft` 命令来与内核交互，因此，测试用例可能需要通过某些库来与内核进行交互，创建一个新的 `nftables` 集合，从而触发 `nf_tables_newset` 函数。
+
+`nf_tables_newset` 被调用时，通常会涉及到一些 `nftables` 配置操作，因此，我们可以创建一个简单的程序来使用 `libnftnl` 库创建新的过滤规则集。这样可以间接触发内核中的 `nf_tables_newset`。
+
+以下是测试用例的构建思路：
+1. 使用 `libnftnl` 库创建一个新的 `nftables` 集合。
+2. 使用 `nft` 命令或者通过直接调用 API 来执行相关操作。
+3. 验证是否触发了内核中的 `nf_tables_newset` 函数。
+
+<pkg install cmd>  
+libnftnl-dev  
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <nftnl/nftnl.h>
+
+int main() {
+    struct nftnl_table *table;
+    struct nftnl_chain *chain;
+    struct nftnl_rule *rule;
+
+    // 创建一个新的 nftables 表
+    table = nftnl_table_alloc();
+    nftnl_table_set_family(table, NFPROTO_INET);
+    nftnl_table_set_name(table, "filter");
+    
+    // 创建一个新的 nftables 链
+    chain = nftnl_chain_alloc();
+    nftnl_chain_set_name(chain, "input");
+    nftnl_chain_set_handle(chain, 1);
+
+    // 创建一个新的 nftables 规则
+    rule = nftnl_rule_alloc();
+    nftnl_rule_set_handle(rule, 1);
+    
+    // 设置规则（这只是一个示例）
+    nftnl_rule_set_expr(rule, NULL);  // 这里可以设置实际的表达式
+
+    // 执行表、链和规则的添加操作
+    nftnl_table_add(table);
+    nftnl_chain_add(chain);
+    nftnl_rule_add(rule);
+
+    // 释放资源
+    nftnl_rule_free(rule);
+    nftnl_chain_free(chain);
+    nftnl_table_free(table);
+
+    printf("nftables set created successfully!\n");
+
+    return 0;
+}
+</code>  
+<code name> test_case_nf_tables_newset.c </code name>  
+
+<compile cmd>  
+gcc -lnftnl test_case_nf_tables_newset.c -o test_case_nf_tables_newset  
+</compile cmd>  

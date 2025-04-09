@@ -1,0 +1,79 @@
+<think process>  
+为了触发 `fanotify_add_new_mark` 函数，我们需要分析函数调用栈。从栈上看，`fanotify_add_new_mark` 是通过 `fanotify_add_mark` 调用的。进一步往下，`fanotify_add_mark` 最终通过系统调用链被触发，涉及的关键函数是 `sys_fanotify_mark`，它调用 `do_fanotify_mark`，然后通过一系列系统调用处理函数（如 `__se_sys_fanotify_mark` 和 `__do_compat_sys_fanotify_mark`）进入内核空间。  
+`fanotify_add_new_mark` 的核心作用是向内核添加一个新的 `fanotify` 标记。这意味着我们需要模拟调用 `fanotify_mark` 系统调用，并设置合适的标志和路径来触发该函数。  
+因此，测试用例的目标是创建一个 `fanotify` 标记，并测试其是否成功触发 `fanotify_add_new_mark` 函数。`fanotify_mark` 的系统调用可以用于监听文件系统事件，因此我们可以在用户态程序中实现一个文件监控的功能，利用 `fanotify_mark` 来触发内核的相关代码路径。
+
+**关键步骤**：
+1. 通过 `fanotify_mark` 系统调用注册一个 `fanotify` 标记。
+2. 设置标记的类型，监听文件系统事件。
+3. 需要处理文件系统相关的事件，并确保通过系统调用链进入到 `fanotify_add_new_mark`。
+
+这里需要注意的是，`fanotify_mark` 的调用需要传递适当的标志来确保触发 `fanotify_add_new_mark`。可以选择监听某些文件的打开、修改等操作。
+
+<pkg install cmd>  
+libc6-dev
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <fcntl.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <sys/fanotify.h>
+
+#define FAN_EVENT_FLAGS (FAN_OPEN | FAN_CLOSE_WRITE | FAN_MODIFY)
+
+int main() {
+    int fan_fd;
+    int dir_fd;
+
+    // 创建一个 fanotify 实例
+    fan_fd = fanotify_init(FAN_CLASSIFY, O_RDONLY);
+    if (fan_fd == -1) {
+        perror("fanotify_init");
+        return 1;
+    }
+
+    // 打开目录文件描述符
+    dir_fd = open("/tmp", O_RDONLY);
+    if (dir_fd == -1) {
+        perror("open");
+        close(fan_fd);
+        return 1;
+    }
+
+    // 设置 fanotify 标记，监控目录内的文件操作
+    if (fanotify_mark(fan_fd, FAN_MARK_ADD, FAN_EVENT_FLAGS, AT_FDCWD, "/tmp") == -1) {
+        perror("fanotify_mark");
+        close(dir_fd);
+        close(fan_fd);
+        return 1;
+    }
+
+    printf("Fanotify mark added successfully, monitoring /tmp\n");
+
+    // 简单等待事件
+    char buf[4096];
+    while (1) {
+        ssize_t len = read(fan_fd, buf, sizeof(buf));
+        if (len == -1) {
+            perror("read");
+            break;
+        }
+
+        printf("Received event: %zd bytes\n", len);
+        // 在此处理事件，例如读取事件内容
+    }
+
+    // 清理
+    close(dir_fd);
+    close(fan_fd);
+
+    return 0;
+}
+<code name> test_case_fanotify.c </code name>  
+
+<compile cmd>  
+gcc test_case_fanotify.c -o test_case_fanotify -lutil  
+</compile cmd>

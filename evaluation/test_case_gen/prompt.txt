@@ -1,0 +1,20 @@
+Kernel Function:
+{target_function}
+
+Call Stack:
+{call_trace}
+
+System call sequence:
+{syscall_sequence}
+
+Response Format (Please strictly follow the format):
+
+<think process> Step-by-step explanation of your thought process and necessary explanations. </think process>
+
+<pkg install cmd> Compilation dependency installation command that can be executed directly in the shell, starting with apt install or pip install, based on the Debian system. If unnecessary, leave it blank, do not output anything here. </pkg install cmd>
+
+<code> Your C language code, do not add any markdown syntax prefixes or suffixes. </code>
+
+<code name> The file name of the C language code, which should follow the format test\_case\_*.c. </code name>
+
+<compile cmd> Compilation command that can be executed directly in the shell, with the working directory being the directory where the C language code is located. Do not add any markdown syntax prefixes or suffixes (e.g., gcc -lpthread test\_case\_netfilter.c -o test\_case\_netfilter). </compile cmd>

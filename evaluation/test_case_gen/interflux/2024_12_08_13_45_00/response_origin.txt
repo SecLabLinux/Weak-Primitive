@@ -1,0 +1,60 @@
+<think process>  
+根据提供的调用栈，`prepare_creds` 是在 `__do_sys_capset` 调用过程中被调用的，它属于 Linux 系统调用的一部分，涉及到用户进程的权限和凭证管理。具体来说，它主要用于为进程准备和设置新的凭证。根据堆栈信息，`__do_sys_capset` 是系统调用 `capset` 的内部实现函数。
+
+要触发 `prepare_creds`，我们需要调用与 `capset` 相关的系统调用。`capset` 系统调用用于设置进程的能力（capabilities），通过它可以修改进程的权限集。调用此系统调用需要用户态程序发起一次 `capset` 调用，因此我们可以使用 `syscall` 来触发这个系统调用。
+
+1. 系统调用 `capset` 的作用是修改当前进程的能力集，因此我们在程序中可以通过 `syscall` 发起 `capset` 调用。
+2. 用户程序需要通过 `capget` 和 `capset` 来操作进程的能力集。`capset` 设置了新的能力集，而 `capget` 则是读取当前的能力集。
+3. 为了确保触发 `prepare_creds`，我们需要确保系统调用路径正确，且是对当前进程的能力进行修改。
+
+我们可以编写一个简单的 C 语言程序，通过 `syscall` 调用 `capset` 来触发 `prepare_creds` 函数。  
+</think process>
+
+<pkg install cmd>  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <sys/capability.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <linux/securebits.h>
+#include <sys/syscall.h>
+
+#define _GNU_SOURCE
+
+// 结构体用于设置新的能力集
+struct __user_cap_header_struct header;
+struct __user_cap_data_struct data[2];
+
+int main() {
+    // 初始化capset header和数据结构
+    header.pid = getpid();  // 设置为当前进程
+    header.version = _LINUX_CAPABILITY_VERSION_3;
+
+    data[0].effective = CAP_SETPCAP;
+    data[0].permitted = CAP_SETPCAP;
+    data[0].inheritable = 0;
+
+    data[1].effective = 0;
+    data[1].permitted = 0;
+    data[1].inheritable = 0;
+
+    // 调用syscall进行capset
+    if (syscall(SYS_capset, &header, data) == -1) {
+        perror("syscall capset failed");
+        return 1;
+    }
+
+    printf("Successfully called capset\n");
+
+    return 0;
+}
+</code>
+
+<code name> test_case_capset.c </code name>
+
+<compile cmd>  
+gcc test_case_capset.c -o test_case_capset -lcap  
+</compile cmd>

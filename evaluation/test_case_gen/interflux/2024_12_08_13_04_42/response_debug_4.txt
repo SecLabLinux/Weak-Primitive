@@ -1,0 +1,48 @@
+<think process>  
+从错误信息来看，编译器无法找到 `ipset/ipset.h` 头文件。问题的根源可能在于以下几点：
+1. `libipset-dev` 库虽然安装了，但可能提供的头文件路径不同，导致编译器无法找到头文件。
+2. 头文件路径可能需要手动指定，尤其是在一些非标准位置。
+
+为了解决这个问题，我们可以做以下几步：
+1. 使用 `dpkg -L libipset-dev` 查看 `libipset-dev` 包的安装位置，确认 `ipset/ipset.h` 是否存在以及它的位置。
+2. 如果该头文件确实存在，但位置不同，可以通过 `-I` 选项在编译时指定正确的头文件搜索路径。
+
+例如，`ipset.h` 可能位于 `/usr/include` 或 `/usr/include/ipset` 等路径下。我们可以手动指定这些路径来确保编译器能够找到头文件。
+
+</think process>  
+<pkg install cmd>  
+libipset-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ipset/ipset.h>
+
+int main() {
+    struct ipset *set;
+    struct ipset_create_param create_param;
+    int ret;
+
+    // 初始化 IP set 创建参数
+    memset(&create_param, 0, sizeof(create_param));
+    create_param.type = IPSET_HASH_IP;
+    create_param.size = 1024;
+    strcpy(create_param.name, "test_ipset");
+
+    // 创建 IP set
+    ret = ipset_create(&set, &create_param);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to create IP set\n");
+        return 1;
+    }
+
+    printf("IP set created successfully\n");
+
+    // 释放资源
+    ipset_destroy(set);
+
+    return 0;
+}
+</code>  
+<compile cmd> gcc -I/usr/include/ipset test_case_ipset_create.c -o test_case_ipset_create -lipset </compile cmd>  

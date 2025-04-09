@@ -1,0 +1,49 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <nfs/nfs4.h>
+
+int main() {
+    struct nfs4_client *clnt;
+    struct nfs4_lock *lock;
+    struct nfs4_fh file_handle;
+    int ret;
+
+    // 初始化 NFS4 客户端
+    clnt = nfs4_create_client("localhost", "nfs", NFS4);
+    if (clnt == NULL) {
+        perror("nfs4_create_client failed");
+        return -1;
+    }
+
+    // 设置文件句柄（假设路径为 "/testfile"）
+    ret = nfs4_get_fh(clnt, "/testfile", &file_handle);
+    if (ret < 0) {
+        perror("nfs4_get_fh failed");
+        nfs4_destroy_client(clnt);
+        return -1;
+    }
+
+    // 初始化 NFS4 锁结构体
+    lock = nfs4_create_lock(clnt, &file_handle);
+    if (lock == NULL) {
+        perror("nfs4_create_lock failed");
+        nfs4_destroy_client(clnt);
+        return -1;
+    }
+
+    // 发起一个锁定请求，触发 rpc_alloc_task
+    ret = nfs4_lock(clnt, lock);
+    if (ret < 0) {
+        perror("nfs4_lock failed");
+    } else {
+        printf("NFS4 lock request successful.\n");
+    }
+
+    // 清理资源
+    nfs4_destroy_lock(lock);
+    nfs4_destroy_client(clnt);
+    
+    return 0;
+}

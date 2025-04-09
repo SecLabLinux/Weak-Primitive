@@ -1,0 +1,69 @@
+<think process>  
+根据调用栈的分析，我们发现 `get_mountpoint` 函数在调用栈的上层涉及到与挂载操作相关的系统调用，尤其是涉及到 `move_mount` 和 `pivot_root` 等与挂载相关的系统调用。从调用栈的路径来看，`get_mountpoint` 是在进行挂载（mount）或路径相关操作时被调用的。要触发该函数，我们需要触发一个和挂载相关的操作。
+
+首先，我们注意到 `do_move_mount` 和 `__do_sys_move_mount` 函数的调用出现在 `get_mountpoint` 调用栈中，这意味着该函数可能与挂载或挂载移动（move mount）操作相关。因此，调用 `move_mount` 系统调用是一个合适的选择。
+
+为了触发 `get_mountpoint`，我们可以编写一个简单的用户态程序，它执行一次 `move_mount` 系统调用。这个系统调用将尝试移动一个挂载点，并触发内核栈中的相关函数。
+
+接下来，我们将编写一个用户程序，使用 `move_mount` 系统调用来操作文件系统的挂载点，确保能够进入调用栈中的相关函数，最终达到 `get_mountpoint` 的调用。
+
+</think process>
+
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mount.h>
+#include <unistd.h>
+
+int main() {
+    const char *source = "/tmp/test_source"; // 原挂载源
+    const char *target = "/tmp/test_target"; // 目标挂载点
+    const char *filesystemtype = "tmpfs";    // 挂载类型
+    unsigned long mountflags = MS_BIND;      // 绑定挂载
+    void *data = NULL;
+
+    // 创建源目录和目标目录
+    if (mkdir(source, 0755) == -1) {
+        perror("mkdir source failed");
+        return 1;
+    }
+    if (mkdir(target, 0755) == -1) {
+        perror("mkdir target failed");
+        return 1;
+    }
+
+    // 执行挂载操作
+    if (mount(source, target, filesystemtype, mountflags, data) == -1) {
+        perror("mount failed");
+        return 1;
+    }
+
+    // 使用 move_mount 来移动挂载点
+    if (move_mount(source, target, target, filesystemtype, MS_MOVE, NULL) == -1) {
+        perror("move_mount failed");
+        return 1;
+    }
+
+    printf("Move mount operation successful\n");
+
+    // 清理目录
+    if (umount(target) == -1) {
+        perror("umount failed");
+    }
+
+    rmdir(source);
+    rmdir(target);
+
+    return 0;
+}
+</code>
+
+<code name> test_case_move_mount.c </code name>
+
+<compile cmd>  
+gcc test_case_move_mount.c -o test_case_move_mount -lmount  
+</compile cmd>

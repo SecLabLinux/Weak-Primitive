@@ -1,0 +1,81 @@
+<think process>  
+在这个问题中，我们需要根据提供的调用栈来构建一个用户态程序，使得内核函数 `do_sys_poll` 被调用。通过分析调用栈，我们可以识别出与 `poll` 系统调用相关的路径。
+
+1. **理解内核函数 `do_sys_poll`：**  
+   - `do_sys_poll` 是 Linux 内核处理 `poll` 系统调用的核心函数。这个函数会处理和监控文件描述符的状态，通常与 IO 操作和事件通知相关。
+   - 从调用栈中可以看到，它与 `select` 系统调用的实现有关，特别是在处理兼容模式时（如 32 位与 64 位兼容）。
+
+2. **分析调用栈：**
+   - 内核的调用路径表明：用户空间程序会通过调用 `poll` 系统调用触发到 `do_sys_poll`。
+   - 函数路径包括了 `__do_compat_sys_ppoll_time32` 和 `__do_compat_sys_ppoll_time64`，这意味着我们可能需要模拟 32 位兼容模式的 `poll` 调用。
+
+3. **用户态程序设计：**
+   - 用户态程序应该使用 `poll` 系统调用。为了触发这个内核函数，我们将构造一个涉及 `poll` 调用的简单程序。
+   - `poll` 调用通常需要一个 `pollfd` 数组，其中包含文件描述符、事件和返回的事件信息。我们可以使用一个管道（pipe）或者文件描述符来触发 `poll` 系统调用。
+
+4. **程序目标：**
+   - 创建一个测试用例，模拟一个 `poll` 系统调用，触发 `do_sys_poll`。可以通过管道的写入操作来触发事件，然后用 `poll` 来监听这些事件。
+
+5. **程序细节：**
+   - 我们将创建一个管道，使用 `poll` 来监听管道的读端。
+   - 通过往管道写入数据，来触发事件，进而触发 `do_sys_poll`。
+
+</think process>
+
+<pkg install cmd>  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/poll.h>
+
+int main() {
+    int pipefds[2];
+    struct pollfd pfds[1];
+    char buf[1];
+
+    // 创建管道
+    if (pipe(pipefds) == -1) {
+        perror("pipe");
+        return 1;
+    }
+
+    // 设置 pollfd 结构
+    pfds[0].fd = pipefds[0];  // 监听管道的读端
+    pfds[0].events = POLLIN;   // 等待可读事件
+
+    // 创建子进程来模拟管道写入
+    if (fork() == 0) {
+        // 子进程，往管道写入数据
+        close(pipefds[0]);  // 关闭读端
+        write(pipefds[1], "a", 1);
+        close(pipefds[1]);  // 关闭写端
+        return 0;
+    } else {
+        // 父进程，使用 poll 来监听事件
+        close(pipefds[1]);  // 关闭写端
+        int ret = poll(pfds, 1, -1);  // 阻塞等待事件发生
+
+        if (ret > 0) {
+            if (pfds[0].revents & POLLIN) {
+                // 数据可读
+                read(pipefds[0], buf, 1);
+                printf("Received data: %c\n", buf[0]);
+            }
+        } else {
+            perror("poll");
+        }
+        close(pipefds[0]);  // 关闭读端
+    }
+
+    return 0;
+}
+</code>
+
+<code name> test_case_do_sys_poll.c </code name>
+
+<compile cmd>  
+gcc -o test_case_do_sys_poll test_case_do_sys_poll.c  
+</compile cmd>

@@ -1,0 +1,59 @@
+<think process> 
+首先，我要理解内核函数 `tcf_proto_create` 的调用栈以及它所处的上下文。
+
+### 分析调用栈：
+- `tcf_proto_create` 是创建流量控制过滤器的核心函数，涉及到 Traffic Control（tc）子系统，它用于设置流量控制和过滤器。
+- `tc_new_tfilter` 是创建新的过滤器的函数，它会调用 `tcf_proto_create` 来初始化一个新的过滤器。
+- `tc_filter_init` 是初始化过滤器的函数，可能涉及到设置过滤器的参数和初始化内核数据结构。
+- `doit` 是实际执行的函数，它可能触发了 `tc_new_tfilter` 或者更高层的操作。
+
+### 目标：
+我们需要通过用户态程序触发这个调用栈。为了实现这一点，我们可以通过模拟 tc 子系统中的命令来创建并初始化一个过滤器。这通常涉及到使用 `tc` 命令，或者通过直接调用内核中的相关接口。
+
+### 用户态触发：
+1. 在用户态程序中，我们可以通过 `setsockopt` 和相关的 netfilter 或 traffic control API 来模拟流量控制和过滤器创建的操作。
+2. 我们需要先创建一个 `tc` 过滤器，并配置适当的参数，使得内核调用 `tcf_proto_create`。
+
+### 方案：
+1. 我们可以使用 `setsockopt` 或其他 `tc` 配置命令来触发内核中的 `tc_new_tfilter` 和 `tcf_proto_create`。 
+2. 需要编写一个 C 语言程序，通过 `tc` 命令或直接使用内核提供的 API 创建过滤器。
+
+</think process>
+
+<pkg install cmd> 
+
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // 创建一个 TC 过滤器命令
+    const char *tc_command = "tc qdisc add dev eth0 root handle 1: htb default 12";
+    const char *filter_command = "tc filter add dev eth0 parent 1: protocol ip prio 1 u32 match ip dst 192.168.0.1 flowid 1:1";
+
+    // 执行创建过滤器的命令
+    if (system(tc_command) == -1) {
+        perror("Failed to create qdisc");
+        return 1;
+    }
+
+    if (system(filter_command) == -1) {
+        perror("Failed to add filter");
+        return 1;
+    }
+
+    printf("Traffic control filter successfully created and applied.\n");
+
+    return 0;
+}
+</code>
+
+<code name> test_case_tc_filter.c </code name>
+
+<compile cmd>
+gcc test_case_tc_filter.c -o test_case_tc_filter
+</compile cmd>

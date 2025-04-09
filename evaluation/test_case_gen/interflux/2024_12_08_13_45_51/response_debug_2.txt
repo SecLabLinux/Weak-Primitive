@@ -1,0 +1,64 @@
+<think process>
+根据报错信息，我们可以发现两处问题：
+
+1. **隐式声明 `open` 函数**：这通常意味着代码中没有包含正确的头文件。`open` 函数位于 `<fcntl.h>` 头文件中，而当前代码中缺少该头文件，因此需要添加 `#include <fcntl.h>`。
+
+2. **未定义 `O_RDWR`**：`O_RDWR` 是由 `<fcntl.h>` 中定义的标志，用于指定文件以读写模式打开。由于缺少 `#include <fcntl.h>`，编译器无法识别该标志，因此需要将其包含进来。
+
+**解决方案**： 
+- 在代码中添加 `<fcntl.h>` 头文件，解决 `open` 和 `O_RDWR` 未定义的问题。
+
+</think process>
+
+<pkg install cmd>
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/ioctl.h>
+#include <unistd.h>
+#include <fcntl.h>  // 添加头文件，定义 open 和 O_RDWR
+
+#define TAPIRO_ENABLE_OFFLOAD 1
+#define TAPIRO_DISABLE_OFFLOAD 0
+
+// 模拟 ioctl 命令触发
+int toggle_taprio_offload(int enable) {
+    int fd = open("/dev/net/tap", O_RDWR);
+    if (fd == -1) {
+        perror("open");
+        return -1;
+    }
+
+    // 模拟调用 ioctl 进行 offload 配置
+    int ret = ioctl(fd, enable ? TAPIRO_ENABLE_OFFLOAD : TAPIRO_DISABLE_OFFLOAD);
+    if (ret == -1) {
+        perror("ioctl");
+    }
+
+    close(fd);
+    return ret;
+}
+
+int main() {
+    printf("Testing Taprio offload allocation...\n");
+
+    // 启用 Taprio offload
+    if (toggle_taprio_offload(1) == -1) {
+        return -1;
+    }
+
+    // 禁用 Taprio offload
+    if (toggle_taprio_offload(0) == -1) {
+        return -1;
+    }
+
+    printf("Test completed.\n");
+    return 0;
+}
+</code>
+
+<compile cmd>
+gcc test_case_taprio_offload.c -o test_case_taprio_offload
+</compile cmd>

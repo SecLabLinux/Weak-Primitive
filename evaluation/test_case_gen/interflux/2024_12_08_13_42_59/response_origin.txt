@@ -1,0 +1,52 @@
+<think process>  
+从调用栈来看，`taprio_change` 是一个涉及到流量整形和调度的内核函数。这个函数通常与 **taprio**（时间感知流量调度）相关，它是在网卡队列调度相关代码中出现的。函数 `taprio_change` 位于 `sch_taprio.c` 中，并且由 `taprio_init` 和 `init` 调用。
+
+我们需要编写一个用户态程序，触发内核中的 `taprio_change` 函数调用。为了实现这个目标，用户态程序需要做以下几件事：
+
+1. **加载网络调度器**：由于 `taprio_change` 和网络队列调度相关，因此需要确保调度器被启用并应用。
+2. **创建一个适当的网络接口**：可以通过命令行工具（如 `ip`）创建一个虚拟的网络接口，并将其绑定到 `taprio` 调度器。
+3. **通过用户态程序触发 `taprio_change`**：在用户态，最直接的方式是通过调用 `tc` 命令或者通过编程接口配置网络调度器，以改变调度器的配置，最终触发 `taprio_change`。
+
+因此，我们需要编写一个用户态程序，它可以通过配置一个网络接口，指定 `taprio` 调度器，并通过配置改变调度器的行为，来触发内核中的 `taprio_change` 函数。
+
+<pkg install cmd>  
+</pkg install cmd>  
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 1. 创建一个虚拟网卡接口
+    system("ip link add name tap0 type dummy");
+
+    // 2. 启用接口
+    system("ip link set tap0 up");
+
+    // 3. 将接口的队列调度器设置为 taprio
+    system("tc qdisc add dev tap0 root handle 1: taprio");
+
+    // 4. 配置 taprio 调度器的属性
+    system("tc qdisc change dev tap0 root handle 1: taprio "
+           "num_tc 4 default 3 "
+           "interval 1000 "
+           "port 0 tc 1 rate 1000 "
+           "port 1 tc 2 rate 1000 "
+           "port 2 tc 3 rate 1000");
+
+    // 5. 进行一些网络操作，以确保调度器配置生效并触发内核函数
+    system("ping -c 1 127.0.0.1");
+
+    // 6. 清理环境
+    system("ip link set tap0 down");
+    system("ip link delete tap0");
+
+    return 0;
+}
+</code>  
+
+<code name> test_case_taprio.c </code name>  
+
+<compile cmd>  
+gcc test_case_taprio.c -o test_case_taprio  
+</compile cmd>  

@@ -1,0 +1,1 @@
+gcc test_case_nft_rule.c -o test_case_nft_rule

@@ -1,0 +1,58 @@
+<think process>  
+根据提供的错误信息 `/bin/sh: 1: sudo: not found`，这表明在执行 `system()` 调用时，shell 没有找到 `sudo` 命令。这种情况通常发生在没有安装 `sudo` 工具，或者在某些环境中（例如没有 root 权限的容器环境）执行时。
+
+### 错误分析：
+- 在 `system()` 调用中，如果命令需要 `sudo` 来获取 root 权限（例如 `ip`、`tc` 命令通常需要 root 权限来修改网络接口或队列调度器），而当前环境中没有 `sudo` 命令，便会出现该错误。
+- 另外，可能是由于缺少 `sudo` 工具或当前用户没有足够的权限。
+
+### 解决办法：
+1. **安装 `sudo`**：如果当前用户需要 `sudo` 来执行权限较高的命令，可以安装 `sudo` 工具。
+   ```bash
+   sudo apt install sudo
+   ```
+2. **直接使用 root 权限执行命令**：如果您有 root 权限，可以直接使用 root 用户来执行代码，而无需依赖 `sudo`。如果在 root 用户下执行命令，`system()` 内的命令会不需要 `sudo`。
+
+3. **修改 C 代码**：如果您在 root 权限下执行程序，或者确保不依赖 `sudo`，可以修改 `system()` 中的命令，去掉 `sudo`。
+
+### 修改后的方案：
+如果您已经拥有 root 权限，可以尝试直接运行命令，不使用 `sudo`。这会避免错误。
+
+</think process>
+
+<pkg install cmd>  
+sudo apt install sudo  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // Step 1: 创建一个虚拟网络接口
+    system("ip link add name test0 type veth peer name test1");
+
+    // Step 2: 启动网络接口
+    system("ip link set dev test0 up");
+    system("ip link set dev test1 up");
+
+    // Step 3: 创建一个 HTB Qdisc
+    system("tc qdisc add dev test0 root handle 1: htb default 12");
+
+    // Step 4: 修改 Qdisc，触发 qdisc_alloc
+    system("tc qdisc change dev test0 root handle 1: htb default 12");
+
+    // Step 5: 清理资源
+    system("ip link set dev test0 down");
+    system("ip link set dev test1 down");
+    system("ip link delete test0");
+    system("ip link delete test1");
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_qdisc_alloc.c -o test_case_qdisc_alloc  
+</compile cmd>

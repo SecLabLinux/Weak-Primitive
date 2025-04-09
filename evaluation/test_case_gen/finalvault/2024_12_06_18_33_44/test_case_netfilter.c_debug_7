@@ -1,0 +1,117 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netlink/netlink.h>
+#include <netlink/msg.h>
+#include <netlink/genl/genl.h>
+#include <netlink/genl/ctrl.h>
+#include <libnftnl/table.h>
+#include <libnftnl/chain.h>
+#include <libnftnl/rule.h>
+#include <linux/netfilter.h>
+#include <linux/netfilter/nf_tables.h>
+
+int main() {
+    struct nl_sock *sock;
+    int family;
+    int ret;
+
+    // 初始化Netlink套接字
+    sock = nl_socket_alloc();
+    if (!sock) {
+        fprintf(stderr, "Failed to allocate netlink socket.\n");
+        return -1;
+    }
+
+    if (genl_connect(sock)) {
+        fprintf(stderr, "Failed to connect to generic netlink.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    family = genl_ctrl_resolve(sock, "nftables");
+    if (family < 0) {
+        fprintf(stderr, "Failed to resolve nftables family.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 创建一个新的表
+    struct nftnl_table *table;
+    char *table_name = "test_table";
+    table = nftnl_table_alloc();
+    if (!table) {
+        fprintf(stderr, "Failed to allocate nftnl_table.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+    nftnl_table_set_str(table, NFTNL_TABLE_NAME, table_name);
+    nftnl_table_set_u32(table, NFTNL_TABLE_FAMILY, NFPROTO_IPV4);
+
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 构建消息负载
+    nftnl_table_nlmsg_build_payload(msg, table);
+
+    // 发送消息
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send table creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nlmsg_free(msg);
+    nftnl_table_free(table);
+
+    // 创建一个新的链
+    struct nftnl_chain *chain;
+    char *chain_name = "test_chain";
+    chain = nftnl_chain_alloc();
+    if (!chain) {
+        fprintf(stderr, "Failed to allocate nftnl_chain.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table_name);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_HOOKNUM, NF_INET_PRE_ROUTING);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_POLICY, NF_DROP);
+
+    msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 构建消息负载
+    nftnl_chain_nlmsg_build_payload(msg, chain);
+
+    // 发送消息
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send chain creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nlmsg_free(msg);
+    nftnl_chain_free(chain);
+
+    printf("Successfully created table '%s' and chain '%s'.\n", table_name, chain_name);
+
+    nl_socket_free(sock);
+    return 0;
+}

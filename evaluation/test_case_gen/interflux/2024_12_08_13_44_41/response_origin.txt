@@ -1,0 +1,56 @@
+<think process>  
+为了触发内核函数 `prepare_creds`，我们需要通过用户态程序触发与之相关的系统调用。根据调用栈，我们可以看到涉及到 `capset` 系统调用的路径。`capset` 系统调用用于设置进程的能力（capabilities），而 `prepare_creds` 是内核中的一个函数，主要用于为当前进程或新进程准备一组凭证（如 UID、GID 和 capabilities）。
+
+因此，最直接的方法是通过调用 `capset` 系统调用来触发 `prepare_creds`。在 `capset` 系统调用的上下文中，`prepare_creds` 会被调用来准备与进程的能力相关的凭证信息。
+
+用户态程序的流程将是：
+1. 使用 `syscall` 调用 `capset` 系统调用。
+2. 提供适当的参数来设置进程的能力。 
+
+我们需要一个合法的 `capset` 系统调用格式。`capset` 系统调用的参数包括：一个 `cap_user_header_t` 类型的头结构和一个 `cap_user_data_t` 类型的数据结构。我们将调用 `capset` 来修改进程的能力，从而触发 `prepare_creds`。
+
+因此，用户态程序将包括：
+- 一个对 `capset` 系统调用的封装。
+- 一个简单的示例来修改进程的能力。
+
+接下来，我们将在 C 程序中实现这一点。  
+</think process>  
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/capability.h>
+#include <sys/syscall.h>
+#include <linux/unistd.h>
+#include <errno.h>
+
+#define __NR_capset 125
+
+int main() {
+    struct __user_cap_header_struct header;
+    struct __user_cap_data_struct data;
+
+    // 设置 header 中的信息
+    header.pid = getpid(); // 目标进程为当前进程
+    header.version = _LINUX_CAPABILITY_VERSION_3;
+
+    // 设置 data 中的信息，修改某项能力
+    data.effective = 0;
+    data.permitted = 0;
+    data.inheritable = 0;
+
+    // 调用 capset 系统调用
+    if (syscall(__NR_capset, &header, &data) == -1) {
+        perror("capset syscall failed");
+        return 1;
+    }
+
+    printf("Successfully called capset and triggered prepare_creds\n");
+    return 0;
+}
+</code>  
+<code name> test_case_capset.c </code name>  
+<compile cmd> gcc test_case_capset.c -o test_case_capset -lcap </compile cmd>  

@@ -1,0 +1,29 @@
+<think process>  
+为了使内核调用到 `alloc_uid` 函数，我们需要触发与用户 ID 相关的系统调用。根据调用栈，`alloc_uid` 被调用的上游函数是 `set_user`，而 `set_user` 又是在一系列的系统调用中被调用的，包括 `__sys_setresuid`、`__sys_setuid` 等。通过分析这些函数，可以看到 `setresuid` 和 `setuid` 系统调用会操作 UID（用户标识符），并且 `alloc_uid` 很可能是在处理这些系统调用时，动态分配新的 UID 的关键函数。
+
+从调用栈中可以看出，`setresuid`、`setuid` 等系统调用的过程涉及到用户态与内核态的切换，并且会操作用户的 UID。因此，我们需要编写一个用户态程序，使用 `setuid()` 或 `setresuid()` 系统调用来触发这个过程。
+
+考虑到 `alloc_uid` 与 UID 的分配有关，可以通过调用 `setuid()` 来触发内核中与 UID 相关的函数链，最终调用到 `alloc_uid`。`setuid()` 是一个较为简单的系统调用，可以用来测试该功能。
+
+因此，测试用例的设计就是通过调用 `setuid()` 系统调用来模拟 UID 分配过程，从而使内核调用 `alloc_uid`。
+
+</think process>  
+<pkg install cmd>  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+
+int main() {
+    uid_t new_uid = 1001;  // 设置一个新的 UID
+    if (setuid(new_uid) == -1) {
+        perror("setuid failed");
+        return 1;
+    }
+    printf("UID set to %d successfully.\n", new_uid);
+    return 0;
+}
+</code>  
+<code name> test_case_alloc_uid.c </code name>  
+<compile cmd> gcc test_case_alloc_uid.c -o test_case_alloc_uid </compile cmd>  

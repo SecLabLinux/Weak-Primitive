@@ -1,0 +1,97 @@
+<think process>  
+为了触发 `pipapo_clone` 内核函数，我们需要通过用户态程序操作涉及 `nft_set_pipapo.c` 文件中定义的多个函数。在调用栈中，我们可以看到从 `pipapo_clone` 到 `nft_pipapo_walk` 依次调用了 `pipapo_maybe_clone`、`nft_pipapo_deactivate`、`nft_pipapo_insert` 和 `nft_pipapo_walk`。为了触发这些函数，我们需要了解其功能和如何在用户态程序中操作它们。
+
+首先，`pipapo_clone` 可能与某种网络过滤操作相关，因为调用栈的函数名表明它涉及 `nft`，即 Netfilter 框架中的某些操作。Netfilter 和 nftables 允许通过用户态应用程序控制内核中的网络过滤规则。
+
+- `pipapo_maybe_clone`：这个函数可能会在特定情况下尝试克隆一个资源。
+- `nft_pipapo_deactivate` 和 `nft_pipapo_insert`：这两个函数应该与插入或激活/停用某些规则有关。
+- `nft_pipapo_walk`：这个函数通常用于遍历某些结构或状态，可能与清理或查看当前规则集有关。
+
+通过理解这些函数的功能，可以推测，我们的用户态程序需要执行一个涉及 `nft` 操作的流程，可能包括添加、删除或操作网络过滤规则，以触发调用栈中这些函数。
+
+因此，我们可以设计一个用户态测试程序，通过 `nft` 命令接口或 `libnftnl` 来进行网络过滤规则的操作，进而触发内核中的 `pipapo_clone` 函数。
+
+在这个程序中，我们将：
+1. 设置一个简单的 `nft` 表。
+2. 插入规则（这可能会触发 `nft_pipapo_insert` 和 `pipapo_maybe_clone`）。
+3. 执行一个删除或修改操作（这可能会触发 `nft_pipapo_deactivate` 和其他相关函数）。
+
+接下来，编写用户态程序时，我们可以使用 `libnftnl` 库，进行 `nft` 规则的插入和删除操作，从而触发内核的相应函数。  
+
+</think process>
+
+<pkg install cmd>  
+libnftnl-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <nftnl/nftnl.h>  
+#include <nftnl/rule.h>  
+#include <nftnl/table.h>  
+#include <nftnl/chain.h>  
+#include <nftnl/expr.h>  
+
+int main() {  
+    struct nftnl_table *table;  
+    struct nftnl_chain *chain;  
+    struct nftnl_rule *rule;  
+    int fd;  
+
+    // 创建 nft 表  
+    table = nftnl_table_alloc();  
+    nftnl_table_set_family(table, NFPROTO_IPV4);  
+    nftnl_table_set_name(table, "test_table");  
+
+    fd = open("/proc/net/netfilter/nf_tables", O_RDWR);  
+    if (fd < 0) {  
+        perror("Failed to open nf_tables");  
+        return 1;  
+    }  
+
+    // 添加表  
+    if (nftnl_table_write(table, fd) < 0) {  
+        perror("Failed to add table");  
+        return 1;  
+    }  
+
+    // 创建链  
+    chain = nftnl_chain_alloc();  
+    nftnl_chain_set_table(chain, table);  
+    nftnl_chain_set_name(chain, "test_chain");  
+    if (nftnl_chain_write(chain, fd) < 0) {  
+        perror("Failed to add chain");  
+        return 1;  
+    }  
+
+    // 创建规则  
+    rule = nftnl_rule_alloc();  
+    nftnl_rule_set_chain(rule, chain);  
+    nftnl_rule_set_expr(rule, NULL);  // 可根据需要设置表达式  
+    if (nftnl_rule_write(rule, fd) < 0) {  
+        perror("Failed to add rule");  
+        return 1;  
+    }  
+
+    // 删除规则  
+    if (nftnl_rule_delete(rule, fd) < 0) {  
+        perror("Failed to delete rule");  
+        return 1;  
+    }  
+
+    close(fd);  
+    nftnl_rule_free(rule);  
+    nftnl_chain_free(chain);  
+    nftnl_table_free(table);  
+
+    return 0;  
+}  
+</code>
+
+<code name> test_case_pipapo_clone.c </code name>
+
+<compile cmd>  
+gcc -lnftnl test_case_pipapo_clone.c -o test_case_pipapo_clone  
+</compile cmd>  

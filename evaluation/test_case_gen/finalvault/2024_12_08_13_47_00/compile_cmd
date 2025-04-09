@@ -1,0 +1,1 @@
+gcc -o test_case_ceph_find_or_create_string test_case_ceph_find_or_create_string.c

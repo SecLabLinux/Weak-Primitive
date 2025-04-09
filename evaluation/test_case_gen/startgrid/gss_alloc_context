@@ -1,0 +1,4 @@
+ gss_alloc_context
+| gss_pipe_downcall
+// auth_gss.c
+\\ downcall

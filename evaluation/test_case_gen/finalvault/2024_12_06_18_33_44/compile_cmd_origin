@@ -1,0 +1,1 @@
+gcc test_case_netfilter.c -lnftnl -lmnl -o test_case_netfilter

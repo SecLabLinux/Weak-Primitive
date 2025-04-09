@@ -1,0 +1,121 @@
+> 正在思考
+**解决编译问题**
+我发现问题在于 `<netlink/netlink.h>` 文件不存在。检查后，我发现应该使用 `<netlink/netlink.h>`，并确保 `libnl3-dev` 已安装。
+**安装libnl-3-dev**
+为了解决 `<netlink/netlink.h>` 缺失的问题，请务必安装 `libnl-3-dev`。确保代码能够正确链接至 `libnl-3` 和 `libnl-genl`。
+**确保安装必要的库**
+安装 `libnl-3-dev` 和 `libnl-genl-3-dev`，然后将编译命令更新为链接这些库。这将解决缺少文件的问题。
+**更新编译命令**
+将编译命令通过添加 `-lnl-3` 和 `-lnl-genl-3` 进行修改，确保正确链接到相应的库，以修复编译错误。
+思考，持续 6 秒
+
+<think process>
+根据编译错误信息 `fatal error: netlink/netlink.h: No such file or directory`，可以判断缺少 `netlink` 库的开发头文件。虽然已经安装了 `libnftnl-dev` 和 `libmnl-dev`，但缺少提供 `netlink/netlink.h` 的 `libnl-3-dev` 和 `libnl-genl-3-dev` 包。此外，编译时需要链接 `libnl-3` 和 `libnl-genl-3` 库。因此，需要安装这些依赖并在编译命令中添加相应的链接选项。
+</think process>
+<pkg install cmd>
+apt install libnl-3-dev libnl-genl-3-dev
+</pkg install cmd>
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netlink/netlink.h>
+#include <netlink/msg.h>
+#include <netlink/genl/genl.h>
+#include <nftnl/table.h>
+#include <nftnl/chain.h>
+#include <nftnl/rule.h>
+
+int main() {
+    struct nl_sock *sock;
+    int family;
+    int ret;
+
+    // 初始化Netlink套接字
+    sock = nl_socket_alloc();
+    if (!sock) {
+        fprintf(stderr, "Failed to allocate netlink socket.\n");
+        return -1;
+    }
+
+    if (genl_connect(sock)) {
+        fprintf(stderr, "Failed to connect to generic netlink.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    family = genl_ctrl_resolve(sock, "nftables");
+    if (family < 0) {
+        fprintf(stderr, "Failed to resolve nftables family.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 创建一个新的表
+    struct nftnl_table *table;
+    char *table_name = "test_table";
+    table = nftnl_table_alloc();
+    nftnl_table_set_str(table, NFTNL_TABLE_NAME, table_name);
+    nftnl_table_set_u32(table, NFTNL_TABLE_FAMILY, NFPROTO_IPV4);
+
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_table_nlmsg_build_hdr(msg, family, NFT_MSG_NEWTABLE, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_table_nlmsg_build_payload(msg, table);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send table creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_table_free(table);
+
+    // 创建一个新的链
+    struct nftnl_chain *chain;
+    char *chain_name = "test_chain";
+    chain = nftnl_chain_alloc();
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table_name);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_HOOKNUM, NF_INET_PRE_ROUTING);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_POLICY, NFT_DROP);
+
+    msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_chain_nlmsg_build_hdr(msg, family, NFT_MSG_NEWCHAIN, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_chain_nlmsg_build_payload(msg, chain);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send chain creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_chain_free(chain);
+
+    printf("Successfully created table '%s' and chain '%s'.\n", table_name, chain_name);
+
+    nl_socket_free(sock);
+    return 0;
+}
+</code>
+<code name>test_case_netfilter.c</code name>
+<compile cmd>
+gcc test_case_netfilter.c -lnftnl -lmnl -lnl-3 -lnl-genl-3 -o test_case_netfilter
+</compile cmd>

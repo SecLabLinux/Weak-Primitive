@@ -1,0 +1,1 @@
+gcc test_case_tbl_mask_array_alloc.c -o test_case_tbl_mask_array_alloc

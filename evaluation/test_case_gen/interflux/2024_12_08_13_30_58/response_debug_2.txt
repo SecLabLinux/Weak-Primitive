@@ -1,0 +1,86 @@
+<think process>  
+1. **错误分析**  
+   - **错误 1：`GSS_C_NULL_NAME` 未声明**  
+     `GSS_C_NULL_NAME` 是一个已废弃的常量，应该使用 `GSS_C_NO_NAME` 来表示一个空的 GSS 名称，因此需要将 `GSS_C_NULL_NAME` 更改为 `GSS_C_NO_NAME`。
+
+   - **错误 2：`strlen` 未声明**  
+     这是因为 `strlen` 函数在 `<string.h>` 头文件中声明，而代码中并未包含此头文件。应该加入 `#include <string.h>` 头文件来解决此问题。
+
+   - **错误 3：`gss_acquire_cred` 参数过多**  
+     `gss_acquire_cred` 的参数不正确。根据 GSSAPI 的文档，`gss_acquire_cred` 只有五个参数，且应该使用 `GSS_C_NO_OID` 代替 `GSS_C_NO_OID_SET`。因此，代码中的参数需要进行修正。
+
+   - **错误 4：`gss_init_sec_context` 参数过少**  
+     `gss_init_sec_context` 的参数不够。根据 GSSAPI 的文档，该函数需要多个参数。需要仔细检查并补充正确的参数。
+
+   - **错误 5：`gss_delete_cred` 和 `gss_delete_name` 未声明**  
+     这些函数的声明缺失，可能是因为没有包含相关的头文件。`gss_delete_cred` 和 `gss_delete_name` 是 GSSAPI 的一部分，应该在代码中包含正确的头文件。
+
+2. **解决方案**  
+   - 修改 `GSS_C_NULL_NAME` 为 `GSS_C_NO_NAME`。
+   - 添加缺少的头文件 `#include <string.h>` 来解决 `strlen` 问题。
+   - 修改 `gss_acquire_cred` 和 `gss_init_sec_context` 函数的参数，确保它们符合 API 的要求。
+   - 添加正确的头文件来声明 `gss_delete_cred` 和 `gss_delete_name`。
+
+</think process>  
+<pkg install cmd>  
+libgssapi-krb5-2  
+libkrb5-dev  
+build-essential  
+</pkg install cmd>  
+<code>  
+#include <gssapi/gssapi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>  // 添加头文件
+
+int main() {
+    OM_uint32 major_status, minor_status;
+    gss_name_t target_name = GSS_C_NO_NAME;  // 修正为 GSS_C_NO_NAME
+    gss_cred_id_t credentials = GSS_C_NO_CREDENTIAL;
+    gss_ctx_id_t context = GSS_C_NO_CONTEXT;
+    gss_buffer_desc input_name_buffer;
+
+    // 设置目标名称（例如 Kerberos principal）
+    input_name_buffer.value = "user@REALM";
+    input_name_buffer.length = strlen(input_name_buffer.value);
+
+    // 将字符串转换为 GSSAPI 名称
+    major_status = gss_import_name(&minor_status, &input_name_buffer, 
+                                   GSS_C_NO_OID, &target_name);
+    if (major_status != GSS_S_COMPLETE) {
+        printf("gss_import_name failed\n");
+        return 1;
+    }
+
+    // 请求凭证（修正参数）
+    major_status = gss_acquire_cred(&minor_status, target_name, 0, 
+                                    GSS_C_NO_OID, GSS_C_ACCEPT, 
+                                    &credentials, NULL, NULL, NULL);
+    if (major_status != GSS_S_COMPLETE) {
+        printf("gss_acquire_cred failed\n");
+        return 1;
+    }
+
+    // 创建 GSSAPI 上下文（修正参数）
+    major_status = gss_init_sec_context(&minor_status, credentials, 
+                                        &context, target_name, 
+                                        GSS_C_NO_OID, 0, 0, 
+                                        NULL, NULL, NULL, NULL, NULL);
+    if (major_status != GSS_S_COMPLETE) {
+        printf("gss_init_sec_context failed\n");
+        return 1;
+    }
+
+    printf("GSSAPI context created successfully\n");
+
+    // 清理资源（修正为正确的函数）
+    gss_release_cred(&minor_status, &credentials);  // 修正为 gss_release_cred
+    gss_release_name(&minor_status, &target_name);  // 修正为 gss_release_name
+    gss_delete_sec_context(&minor_status, &context, NULL);
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc -lgssapi_krb5 test_case_gssapi_context.c -o test_case_gssapi_context  
+</compile cmd>  

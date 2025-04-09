@@ -1,0 +1,17 @@
+{
+    "files.associations": {
+        "back_trace_alloc.h": "c",
+        "kernel.h": "c",
+        "array": "c",
+        "string_view": "c",
+        "initializer_list": "c",
+        "utility": "c",
+        "*.tcc": "c",
+        "*.code": "c",
+        "spinlock.h": "c",
+        "close_range.h": "c"
+    },
+    "[python]": {
+        "editor.defaultFormatter": "ms-python.black-formatter"
+      }
+}

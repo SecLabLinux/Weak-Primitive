@@ -1,0 +1,103 @@
+<think process>  
+根据提供的调用栈，可以看到 `nl80211_parse_rnr_elems` 是一个在 `nl80211.c` 中的函数，它是由 `nl80211_parse_beacon` 调用的，而 `nl80211_parse_beacon` 又被 `nl80211_channel_switch`、`nl80211_color_change`、`nl80211_set_beacon` 和 `nl80211_start_ap` 等函数调用。  
+从这些信息可以推测，`nl80211_parse_rnr_elems` 可能涉及到无线网络的相关配置或信息解析，尤其是在处理信标帧（Beacon Frame）时。`nl80211_parse_beacon` 的名字表明它是在解析无线网络中的信标帧，这与 `nl80211_start_ap` 和 `nl80211_set_beacon` 等函数密切相关，后者涉及到配置无线接入点（AP）的功能。
+
+要触发 `nl80211_parse_rnr_elems` 函数，最直接的方法是通过配置或启动一个无线接入点，这通常会涉及到信标帧的生成与解析，因此可以通过调用 `nl80211_start_ap` 来触发这个栈中的函数调用。我们可以使用 `iw` 命令或者通过 `nl80211` 接口的相关 ioctl 系统调用来模拟这种行为。
+
+我们需要编写一个用户态程序，使用 `nl80211` 接口来启动一个无线接入点（AP）。通过这种方式，可以确保 `nl80211_start_ap` 被调用，从而最终触发 `nl80211_parse_rnr_elems`。为了简化，我们将直接通过 Linux 的 nl80211 接口与无线设备交互，启动一个简单的 AP。
+
+用户态程序将：
+1. 使用 `nl80211` 协议的套接字接口来与无线设备进行通信。
+2. 配置并启动一个无线接入点。
+3. 触发内核调用栈中的相关函数。
+
+<pkg install cmd>  
+libnl-3-dev  
+libnl-genl-3-dev  
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <unistd.h>  
+#include <linux/nl80211.h>  
+#include <net/inet_pton.h>  
+#include <net/genl/genl.h>  
+#include <net/genl/ctrl.h>  
+#include <net/genl/msg.h>  
+#include <linux/socket.h>  
+#include <linux/netlink.h>  
+
+#define WIFI_IFACE "wlan0"  // 需要根据实际情况调整接口名  
+
+int main() {  
+    int nl_sock, nl80211_id, ifindex;  
+    struct nl_msg *msg;  
+    struct genlmsghdr *genl_hdr;  
+    struct nlattr *nla;  
+    int ret;  
+    
+    // 创建 Netlink 套接字  
+    nl_sock = socket(AF_NETLINK, SOCK_RAW, NETLINK_GENERIC);  
+    if (nl_sock < 0) {  
+        perror("socket");  
+        return -1;  
+    }  
+    
+    // 获取 nl80211 协议的 ID  
+    nl80211_id = genl_ctrl_resolve(nl_sock, "nl80211");  
+    if (nl80211_id < 0) {  
+        perror("nl80211 protocol not found");  
+        return -1;  
+    }  
+    
+    // 获取无线接口的索引  
+    ifindex = if_nametoindex(WIFI_IFACE);  
+    if (ifindex == 0) {  
+        perror("Invalid interface name");  
+        return -1;  
+    }  
+    
+    // 创建消息并填充  
+    msg = nlmsg_alloc();  
+    if (!msg) {  
+        perror("nlmsg_alloc");  
+        return -1;  
+    }  
+    
+    genl_hdr = genlmsg_put(msg, 0, 0, nl80211_id, 0, 0, NL80211_CMD_NEW_INTERFACE, 0);  
+    if (!genl_hdr) {  
+        perror("genlmsg_put");  
+        return -1;  
+    }  
+    
+    nla = nla_nest_start(msg, NL80211_ATTR_IFNAME);  
+    if (!nla) {  
+        perror("nla_nest_start");  
+        return -1;  
+    }  
+    nla_put(msg, NL80211_ATTR_IFNAME, strlen(WIFI_IFACE) + 1, WIFI_IFACE);  
+    nla_nest_end(msg, nla);  
+    
+    // 发送消息  
+    ret = send(nl_sock, NLMSG_DATA(msg), nlmsg_len(msg), 0);  
+    if (ret < 0) {  
+        perror("send");  
+        return -1;  
+    }  
+    
+    // 等待并处理响应（简化：没有进行详细的响应处理）  
+    char buf[4096];  
+    ret = recv(nl_sock, buf, sizeof(buf), 0);  
+    if (ret < 0) {  
+        perror("recv");  
+        return -1;  
+    }  
+    
+    // 关闭套接字  
+    close(nl_sock);  
+    return 0;  
+}  
+<code name> test_case_nl80211_start_ap.c </code name>  
+
+<compile cmd> gcc -o test_case_nl80211_start_ap test_case_nl80211_start_ap.c -lnl-3 -lnl-genl-3 </compile cmd>  

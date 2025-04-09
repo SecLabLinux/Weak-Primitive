@@ -1,0 +1,64 @@
+<think process>  
+从报错信息来看，错误是由于系统无法找到 `libc6-dev` 包。这通常是因为该包尚未安装，或者系统的包管理器没有正确配置。
+
+`libc6-dev` 是用于提供 C 库开发所需头文件的包，通常安装该包可以解决编译错误。然而，报错信息本身并未明确表明编译过程中的具体错误，而是直接提示包未找到，因此我怀疑可能是系统包源配置的问题，或者这个包的名字在某些系统中可能有所不同。首先需要确保依赖已安装，并检查包是否正确配置。
+
+另外，错误信息显示问题出现在 `libc6-dev`，这是一个开发包，正常情况下，如果 `gcc` 可以正常工作，则应该已经安装了相关依赖。确认依赖安装后，我会检查代码中的 `clone` 系统调用部分，是否正确地使用了系统调用接口。
+
+在这种情况下，我建议先确认是否安装了正确的包，并尝试解决包管理器的路径问题。之后还需要确认 `clone` 的调用参数是否正确。
+
+至于编译错误，检查系统调用时应确保参数和栈的正确性。例如：`clone` 需要一个指向子进程栈的指针，并且要正确设置标志（`clone_flags`）。可以通过修正编译环境并尝试手动指定正确的开发工具包来解决。
+
+需要检查和修复的事项：
+1. 确保 `libc6-dev` 包正确安装。
+2. 确认是否需要安装其他依赖。
+3. 检查 `clone` 函数参数。
+
+</think process>
+
+<pkg install cmd>  
+apt install libc6-dev  
+</pkg install cmd>
+
+<code>  
+#define _GNU_SOURCE
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int child_func(void *arg) {
+    printf("Child process created\n");
+    return 0;
+}
+
+int main() {
+    const int stack_size = 1024 * 1024;
+    char *stack = malloc(stack_size);
+    if (stack == NULL) {
+        perror("malloc");
+        return 1;
+    }
+
+    // 使用 clone 系统调用创建一个新进程
+    int clone_flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
+    pid_t pid = clone(child_func, stack + stack_size, clone_flags, NULL);
+    
+    if (pid == -1) {
+        perror("clone");
+        free(stack);
+        return 1;
+    }
+
+    // 等待子进程结束
+    waitpid(pid, NULL, 0);
+    free(stack);
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc -o test_case_clone test_case_clone.c -lrt -pthread  
+</compile cmd>

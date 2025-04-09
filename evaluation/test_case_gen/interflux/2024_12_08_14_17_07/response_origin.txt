@@ -1,0 +1,62 @@
+<think process> 
+要触发 `rpc_new_client` 内核函数，首先需要了解它所在的调用栈结构。根据提供的调用栈，`rpc_new_client` 是由 `__rpc_clone_client` 调用的，而这个函数通过多个 RPC 服务和客户端创建的过程逐渐进行。最终触发这个函数的关键操作是进行 NFS 客户端的初始化和调用相关的 RPC 操作。我们可以从 `nfs_init_server`, `rpc_create_xprt`, `rpc_create` 等函数分析，NFS 客户端和服务器的初始化涉及 RPC 创建客户端的过程。
+
+为了模拟该过程，我们需要构建一个能够触发这些操作的测试用例。该测试用例需要模拟 NFS 客户端创建，并触发 RPC 客户端和服务的初始化，间接调用 `rpc_new_client`。
+
+通过分析栈结构，最合适的路径是通过 `nfs_mount` 或 `nfs_umount` 这些函数来初始化 NFS 客户端，同时涉及到创建 RPC 连接。我们将通过 `nfs_mount` 来触发 NFS 客户端的创建过程。
+
+从代码实现上看，`nfs_mount` 会通过多个底层函数发起 NFS 客户端的创建请求，我们的测试用例将通过执行 `mount` 操作来触发这些过程。需要注意的是，`nfs_mount` 在内核中会通过系统调用与 NFS 服务进行交互，因此在用户态程序中可以通过简单的 `mount` 操作进行模拟。
+
+我们将通过以下步骤编写程序：
+1. 使用 `mount` 函数挂载 NFS 文件系统。
+2. 触发 NFS 客户端的初始化流程，最终导致 `rpc_new_client` 被调用。
+
+该程序将模拟实际的 NFS 挂载请求，并通过 RPC 创建客户端，从而触发内核中的相关函数。
+
+</think process>
+
+<pkg install cmd> 
+libc6-dev
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mount.h>
+
+int main() {
+    const char *nfs_server = "192.168.1.100:/nfs_share";  // NFS 服务器地址
+    const char *mount_point = "/mnt/nfs";  // 挂载点
+
+    // 创建挂载点目录
+    if (mkdir(mount_point, 0777) == -1) {
+        perror("mkdir");
+        return 1;
+    }
+
+    // 执行挂载操作，模拟 NFS 客户端的挂载过程
+    if (mount(nfs_server, mount_point, "nfs", 0, NULL) == -1) {
+        perror("mount");
+        return 1;
+    }
+
+    printf("NFS mount successful. Triggered RPC client creation.\n");
+
+    // 卸载操作，模拟卸载 NFS 文件系统
+    if (umount(mount_point) == -1) {
+        perror("umount");
+        return 1;
+    }
+
+    printf("NFS umount successful.\n");
+
+    return 0;
+}
+</code>
+
+<code name> test_case_rpc_new_client.c </code name>
+
+<compile cmd>
+gcc -o test_case_rpc_new_client test_case_rpc_new_client.c
+</compile cmd>

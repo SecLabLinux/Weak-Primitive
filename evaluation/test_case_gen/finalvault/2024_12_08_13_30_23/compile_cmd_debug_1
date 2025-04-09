@@ -1,0 +1,1 @@
+gcc -o test_case_x509_cert_parse test_case_x509_cert_parse.c -lssl -lcrypto

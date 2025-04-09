@@ -1,0 +1,57 @@
+<think process>  
+根据错误信息 `/bin/sh: 1: libelf-dev: not found`，系统提示找不到 `libelf-dev` 包。这个包用于处理 ELF 格式的文件，但显然在你的系统中没有找到对应的安装包。可能是系统缺少某些依赖，或者该包的名称有所不同。
+
+### 错误分析：
+1. **错误原因：** `libelf-dev` 包是为了支持 ELF 文件处理和调试工具链相关操作而安装的，但如果你在系统中没有找到该包，可以通过检查安装源或重新安装它来解决此问题。最常见的错误是包没有正确安装，或者安装命令出现问题。
+2. **解决方案：**  
+    - 首先，确认系统是否有有效的软件源，并确保该包的正确名称。
+    - 其次，尝试重新安装或修复 `libelf-dev` 包。
+
+### 解决步骤：
+- 在 Debian 系统中，首先确认是否可以从适当的仓库安装该包，或者直接检查当前包是否存在。
+- 如果找不到该包，尝试更新软件源，或者选择合适的替代库来完成固件的加载功能。
+
+**安装步骤**：
+1. 尝试安装 `libelf-dev` 包：
+   ```sh
+   sudo apt update
+   sudo apt install libelf-dev
+   ```
+2. 如果继续遇到问题，可以检查包名称是否正确或考虑其他依赖的安装。
+
+</think process>  
+<pkg install cmd>  
+apt install libelf-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/firmware.h>
+
+int main() {
+    const char *firmware_name = "non_existent_firmware.bin"; // 固件名称，可以是任何名称
+    const struct firmware *fw = NULL;
+    
+    // 请求固件
+    int ret = request_firmware(&fw, firmware_name, "/lib/firmware");
+    if (ret != 0) {
+        printf("Failed to request firmware: %d\n", ret);
+        return -1;
+    }
+
+    printf("Firmware loaded successfully.\n");
+
+    // 在这里我们可以触发内核函数
+    release_firmware(fw);  // 释放固件资源
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc -o test_case_prepare_kernel_cred test_case_prepare_kernel_cred.c -l firmware -lm  
+</compile cmd>

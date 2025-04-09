@@ -1,0 +1,74 @@
+<think process>  
+从调用栈中可以看到，`ip_mc_msfilter` 函数最终是通过 `setsockopt` 系列函数被调用的。`setsockopt` 是用于配置套接字选项的系统调用，而 `ip_mc_msfilter` 属于多播管理的一部分，通常用于设置多播组过滤器。
+
+1. **`ip_mc_msfilter`** 主要是在处理与多播相关的套接字选项时被调用的。
+2. 在调用栈中，多个 `setsockopt` 调用经过不同的协议栈实现，包括 `mptcp_setsockopt`、`raw_setsockopt`、`udp_setsockopt` 等，最终都是调用 `do_ip_setsockopt` 来处理多播相关的选项。
+3. `ip_mc_msfilter` 具体的实现涉及到多播成员过滤器的设置，所以我们需要在用户态通过 `setsockopt` 来触发这一操作。
+4. 通过设置合适的套接字选项来模拟 `ip_mc_msfilter` 的调用，需要选择合适的多播相关选项，并确保在使用时将正确的多播组和过滤器信息传递给内核。
+
+所以，为了测试 `ip_mc_msfilter`，我们将编写一个简单的 C 程序，创建一个 UDP 套接字，设置它的多播选项，并触发 `setsockopt` 调用，从而间接调用 `ip_mc_msfilter`。这可以通过设置 `IP_ADD_MEMBERSHIP` 或 `IP_DROP_MEMBERSHIP` 套接字选项来实现。
+
+具体实现步骤：
+1. 创建一个 UDP 套接字。
+2. 设置多播组成员资格。
+3. 调用 `setsockopt` 设置合适的多播选项。
+
+这将触发内核中的 `ip_mc_msfilter` 函数。
+
+</think process>  
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/udp.h>
+#include <netinet/ip_multicast.h>
+
+int main() {
+    int sock;
+    struct sockaddr_in addr;
+    struct ip_mreq mreq;
+
+    // 创建 UDP 套接字
+    sock = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sock < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    // 设置地址
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons(12345);  // 任意端口
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    // 绑定套接字
+    if (bind(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
+        perror("bind");
+        close(sock);
+        exit(1);
+    }
+
+    // 设置多播组成员资格
+    mreq.imr_multiaddr.s_addr = inet_addr("239.255.255.250");  // 任意多播地址
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    if (setsockopt(sock, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("setsockopt IP_ADD_MEMBERSHIP");
+        close(sock);
+        exit(1);
+    }
+
+    printf("Successfully added to multicast group\n");
+
+    // 关闭套接字
+    close(sock);
+    return 0;
+}
+</code>  
+<code name> test_case_ip_mc_msfilter.c </code name>  
+<compile cmd> gcc -o test_case_ip_mc_msfilter test_case_ip_mc_msfilter.c </compile cmd>

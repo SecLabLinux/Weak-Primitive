@@ -1,0 +1,1 @@
+gcc test_case_nl80211_ap.c -o test_case_nl80211_ap -lnl-3 -lnl-genl-3

@@ -1,0 +1,43 @@
+<think process> 
+为了触发 `__fsnotify_alloc_group` 内核函数，我们需要通过调用相关的系统调用来激活内核中的某些路径。根据调用栈，`__fsnotify_alloc_group` 是由 `fsnotify_alloc_group` 调用的，而 `fsnotify_alloc_group` 是在 `__do_sys_fanotify_init` 这类函数中被调用的。`fanotify` 是一个用于通知文件系统事件的机制，涉及到文件监视。因此，为了触发 `__fsnotify_alloc_group`，我们需要触发 `fanotify_init` 系统调用。
+
+我们从调用栈可以看到 `fanotify_init` 系统调用是通过 `__do_sys_fanotify_init` 调用的。因此，编写用户态程序时，我们的目标是使用 `fanotify_init` 系统调用来初始化一个 `fanotify` 实例。
+
+`fanotify_init` 的基本功能是初始化一个文件系统通知机制，因此我们将编写一个调用 `fanotify_init` 的用户态程序，目的是触发内核对 `__fsnotify_alloc_group` 的调用。
+
+1. **Fanotify Init 调用：** 在用户程序中，我们需要调用 `fanotify_init` 系统调用来触发内核逻辑。我们可以使用 `syscall` 函数来直接调用 `fanotify_init` 系统调用。
+2. **Fanotify Group：** 通过传入合适的标志，我们可以初始化一个文件系统监视组，并检查它是否成功创建。
+
+根据这些思路，编写一个简单的用户态程序，触发 `fanotify_init`，间接调用 `__fsnotify_alloc_group`。
+
+</think process>
+
+<pkg install cmd> 
+</pkg install cmd>
+
+<code> 
+#include <stdio.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <unistd.h>
+#include <linux/fanotify.h>
+#include <fcntl.h>
+
+int main() {
+    int fanotify_fd;
+    fanotify_fd = syscall(SYS_fanotify_init, FAN_CLOEXEC | FAN_NONBLOCK, O_RDONLY);
+    
+    if (fanotify_fd == -1) {
+        perror("fanotify_init failed");
+        return 1;
+    }
+
+    printf("Fanotify initialized successfully with fd: %d\n", fanotify_fd);
+    close(fanotify_fd);
+    return 0;
+}
+</code>
+
+<code name> test_case_fanotify_init.c </code name>
+
+<compile cmd> gcc -o test_case_fanotify_init test_case_fanotify_init.c </compile cmd>

@@ -1,0 +1,62 @@
+<think process>  
+根据错误信息 `/bin/sh: 1: libnl-3-dev: not found` 和 `/bin/sh: 2: libnl-genl-3-dev: not found`，看起来问题并不在于 C 语言代码本身，而是在编译时的环境配置上。错误提示表明系统无法找到 `libnl-3-dev` 和 `libnl-genl-3-dev` 这两个开发库，这通常意味着：
+
+1. 这些库未正确安装。
+2. 编译器或构建环境无法找到它们的安装路径。
+
+此时，解决方案是确保这些开发库已经正确安装，并且库路径已经被正确设置。你已经提到这两个依赖已安装，可能是因为它们未正确链接到编译器的搜索路径中。
+
+因此，我会建议确认安装的依赖路径，并且确保系统路径环境配置正确。可以尝试重新安装并确保这些开发包正确安装在 `/usr/include/` 或 `/usr/local/include/` 等默认路径下。
+
+同时，检查并确保编译命令正确包含了所需要的库和头文件路径。
+
+</think process>
+
+<pkg install cmd>  
+apt install libnl-3-dev libnl-genl-3-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // 设定网卡接口名，通常是 wlan0 或其他
+    const char *interface = "wlan0";
+    
+    // 配置 SSID 和信道
+    const char *ssid = "TestAP";
+    int channel = 6;
+    
+    // 使用 iw 工具设置无线网卡
+    char command[256];
+
+    // 1. 设置无线网卡工作模式为 AP
+    snprintf(command, sizeof(command), "iw dev %s set type ap", interface);
+    system(command);
+
+    // 2. 设置信道
+    snprintf(command, sizeof(command), "iw dev %s set channel %d", interface, channel);
+    system(command);
+
+    // 3. 启动一个简单的接入点
+    snprintf(command, sizeof(command), "hostapd -B -P /var/run/hostapd.pid /etc/hostapd/hostapd.conf");
+    system(command);
+
+    // 打印成功信息
+    printf("AP is started on interface %s with SSID: %s on channel %d\n", interface, ssid, channel);
+
+    // 持续运行，保持 AP 存在
+    while(1) {
+        sleep(10);
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_nl80211_ap.c -o test_case_nl80211_ap -lnl-3 -lnl-genl-3  
+</compile cmd>

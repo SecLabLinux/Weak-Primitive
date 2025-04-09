@@ -1,0 +1,77 @@
+<think process>
+根据编译错误信息，逐一分析问题及解决方案：
+
+1. **错误：`storage size of ‘pol’ isn’t known` 和 `storage size of ‘doi’ isn’t known`**
+   - 这两个错误表明编译器找不到 `xfrm_user_policy` 和 `xfrm_user_doi` 结构体的定义。这通常是因为相应的头文件未被正确引入，或者内核版本和头文件不兼容。
+
+2. **错误：`‘struct xfrm_user_tmpl’ has no member named ‘doi’`**
+   - `xfrm_user_tmpl` 结构体没有 `doi` 成员，说明在使用这个结构体时，使用了错误的成员名称。需要检查 `xfrm_user_tmpl` 的定义，并修正代码。
+
+3. **错误：`‘SOL_XFRM’ undeclared`**
+   - `SOL_XFRM` 是 `setsockopt()` 的一个常量，表示与 xfrm 相关的套接字选项。如果未定义它，可能是缺少相关的头文件。应该包含正确的头文件 `#include <linux/xfrm.h>` 或者与 `xfrm` 相关的文件。
+
+4. **警告：`implicit declaration of function ‘close’`**
+   - 这是因为 `close` 函数来自 `unistd.h`，但代码中没有引入该头文件。需要引入 `unistd.h` 头文件来解决。
+
+**解决方案**：
+- 确保头文件路径正确，包含所有必需的头文件。
+- 修正结构体成员引用错误。
+- 引入缺失的头文件，修正 `close()` 函数的警告。
+
+</think process>
+
+<pkg install cmd> </pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+#include <linux/xfrm.h>
+#include <unistd.h>  // 为了 close 函数
+#include <linux/if_ether.h>
+
+#define XFRM_POLICY_TYPE XFRM_POLICY_OUT
+
+int main() {
+    int sock;
+    struct sockaddr_in addr;
+    struct xfrm_user_policy pol;
+    struct xfrm_user_tmpl tmpl;
+    
+    sock = socket(AF_INET, SOCK_RAW, IPPROTO_IPIP);  // 使用原始套接字
+    if (sock < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    memset(&pol, 0, sizeof(pol));
+    memset(&tmpl, 0, sizeof(tmpl));
+
+    // 填充政策结构
+    pol.saddr = inet_addr("192.168.1.1");  // 源地址
+    pol.daddr = inet_addr("192.168.1.2");  // 目标地址
+    pol.family = AF_INET;
+    pol.policy = XFRM_POLICY_OUT;
+    pol.tmpl = &tmpl;
+    
+    // 设置模板
+    tmpl.family = AF_INET;
+
+    // 调用系统调用添加策略
+    if (setsockopt(sock, SOL_XFRM, XFRM_MSG_NEWPOLICY, &pol, sizeof(pol)) < 0) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    printf("XFRM policy added successfully.\n");
+
+    close(sock);
+    return 0;
+}
+</code>
+
+<compile cmd> gcc test_case_xfrm_policy.c -o test_case_xfrm_policy -lssl -lcrypto </compile cmd>

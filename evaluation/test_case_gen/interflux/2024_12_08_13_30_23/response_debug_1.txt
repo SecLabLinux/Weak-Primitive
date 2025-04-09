@@ -1,0 +1,51 @@
+<think process>  
+根据报错信息 `/bin/sh: 1: libssl-dev: not found`，问题的核心不在于代码的语法错误，而是在编译时找不到 `libssl-dev` 相关的库文件。`libssl-dev` 是 OpenSSL 开发包，包含头文件和库文件，在编译时需要正确链接。
+
+该错误通常意味着：
+1. 编译时系统无法找到 OpenSSL 的头文件或者库。
+2. 可能是系统找不到正确的路径，或者系统中没有安装 `libssl-dev` 库。
+   
+解决办法是确认安装 `libssl-dev` 是否正确，若没有安装，使用正确的命令安装它。
+
+我已经确认 `libssl-dev` 依赖已经安装，但是问题出在编译命令中缺少了对 OpenSSL 库的显式链接，需要添加 `-lssl -lcrypto` 来链接 OpenSSL 所需的库。此外，`keyctl` 的命令也许存在一些问题，需确认其正确性和参数的使用。
+
+<pkg install cmd>  
+apt install libssl-dev  
+</pkg install cmd>  
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <unistd.h>  
+#include <string.h>  
+#include <sys/types.h>  
+#include <sys/stat.h>  
+#include <fcntl.h>  
+#include <openssl/pkcs7.h>  
+#include <openssl/x509.h>  
+
+int main() {  
+    // 创建一个示例的 PKCS#7 证书  
+    const char *cert_filename = "cert.pem";  
+    const char *pkcs7_filename = "cert.p7b";  
+
+    // 使用 openssl 工具生成证书文件
+    char command[256];  
+    snprintf(command, sizeof(command), "openssl req -x509 -newkey rsa:2048 -keyout private.key -out %s -days 365", cert_filename);  
+    system(command);  
+
+    // 使用 openssl 工具生成 PKCS#7 格式证书
+    snprintf(command, sizeof(command), "openssl crl2pkcs7 -nocrl -certfile %s -out %s", cert_filename, pkcs7_filename);  
+    system(command);  
+
+    // 将 PKCS#7 文件传递给内核进行处理，模拟加载证书过程
+    snprintf(command, sizeof(command), "keyctl add user my_cert %s @s", pkcs7_filename);  
+    system(command);  
+
+    return 0;  
+}  
+</code>  
+
+<compile cmd>  
+gcc -o test_case_x509_cert_parse test_case_x509_cert_parse.c -lssl -lcrypto  
+</compile cmd>

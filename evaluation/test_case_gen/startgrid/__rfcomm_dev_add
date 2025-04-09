@@ -1,0 +1,11 @@
+ __rfcomm_dev_add
+| rfcomm_dev_add
+|| __rfcomm_create_dev
+||| rfcomm_create_dev
+|||| rfcomm_dev_ioctl
+||||| rfcomm_sock_ioctl
+////// sock.c
+\\\\\\ ioctl
+|||||| rfcomm_sock_compat_ioctl
+/////// sock.c
+\\\\\\\ compat_ioctl

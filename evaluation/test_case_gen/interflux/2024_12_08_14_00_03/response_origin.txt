@@ -1,0 +1,59 @@
+<think process>  
+`ovl_read_iter` 是 OverlayFS 的一个内核函数，用于处理文件的读取操作。这个函数通常由 `read_iter` 调用，而 `read_iter` 是 Linux 内核的文件读取操作的标准接口。要触发 `ovl_read_iter`，我们需要操作一个在 OverlayFS 上挂载的文件系统，并执行文件读取操作。  
+1. 需要首先确保测试环境中已经挂载了 OverlayFS。  
+2. `ovl_read_iter` 被调用的情况通常是在用户态发起文件读取（如 `read()` 或 `pread()`）时，由内核通过 `read_iter` 调用。因此，我们的目标是通过一个文件读取操作来触发 `ovl_read_iter`。  
+3. 我们将使用一个普通的用户态程序，利用文件读取操作，并确保文件位于 OverlayFS 文件系统上。  
+4. 用户态程序中将包含文件的打开和读取操作，并通过 OverlayFS 文件系统来确保 `ovl_read_iter` 被调用。  
+
+根据调用栈的结构，`ovl_read_iter` 由 `read_iter` 调用，因此，我们的测试用例需要通过标准的文件读取操作来触发 `read_iter`，进而调用 `ovl_read_iter`。  
+
+为实现这个目标，我们将使用 `open()` 打开一个文件，并使用 `read()` 来触发文件读取操作，间接调用 `read_iter`，并通过 OverlayFS 文件系统来使得最终调用到 `ovl_read_iter`。  
+
+</think process>
+
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+int main() {
+    // 确保文件在 OverlayFS 文件系统上
+    const char *file_path = "/mnt/overlayfs/test_file.txt";
+    
+    // 打开文件
+    int fd = open(file_path, O_RDONLY);
+    if (fd == -1) {
+        perror("Failed to open file");
+        return 1;
+    }
+
+    // 读取文件
+    char buffer[256];
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+    if (bytes_read == -1) {
+        perror("Failed to read file");
+        close(fd);
+        return 1;
+    }
+
+    // 打印读取内容
+    printf("Read %ld bytes from file: %.*s\n", bytes_read, (int)bytes_read, buffer);
+
+    // 关闭文件
+    close(fd);
+    
+    return 0;
+}
+</code>  
+
+<code name> test_case_overlayfs_read.c </code name>
+
+<compile cmd>  
+gcc -o test_case_overlayfs_read test_case_overlayfs_read.c  
+</compile cmd>

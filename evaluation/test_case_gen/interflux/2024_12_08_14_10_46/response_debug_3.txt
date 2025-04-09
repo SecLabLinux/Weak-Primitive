@@ -1,0 +1,74 @@
+<think process>  
+错误信息 `fatal error: nfs/nfs4.h: No such file or directory` 表示编译器找不到 `nfs/nfs4.h` 头文件。尽管已经安装了 `libnfs-dev`，头文件仍然无法找到，这表明编译器没有包含正确的路径。
+
+首先，应该确认是否已正确安装并且头文件 `nfs4.h` 是否存在。可以通过以下命令查找该头文件路径：
+```bash
+find /usr/include -name nfs4.h
+```
+如果该文件存在，应该将包含路径 (`-I`) 添加到编译命令中，或者通过检查安装路径确认库的位置。
+
+通常，`libnfs-dev` 包的头文件会位于 `/usr/include/nfs` 目录。确保将该目录添加到编译命令的包含路径中。
+
+此外，根据你给出的信息，编译错误也可能是由于库文件链接问题。如果编译命令没有正确指定库文件，也会导致编译失败。
+
+</think process>
+
+<pkg install cmd>  
+apt install libnfs-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <nfs/nfs4.h>
+
+int main() {
+    struct nfs4_client *clnt;
+    struct nfs4_lock *lock;
+    struct nfs4_fh file_handle;
+    int ret;
+
+    // 初始化 NFS4 客户端
+    clnt = nfs4_create_client("localhost", "nfs", NFS4);
+    if (clnt == NULL) {
+        perror("nfs4_create_client failed");
+        return -1;
+    }
+
+    // 设置文件句柄（假设路径为 "/testfile"）
+    ret = nfs4_get_fh(clnt, "/testfile", &file_handle);
+    if (ret < 0) {
+        perror("nfs4_get_fh failed");
+        nfs4_destroy_client(clnt);
+        return -1;
+    }
+
+    // 初始化 NFS4 锁结构体
+    lock = nfs4_create_lock(clnt, &file_handle);
+    if (lock == NULL) {
+        perror("nfs4_create_lock failed");
+        nfs4_destroy_client(clnt);
+        return -1;
+    }
+
+    // 发起一个锁定请求，触发 rpc_alloc_task
+    ret = nfs4_lock(clnt, lock);
+    if (ret < 0) {
+        perror("nfs4_lock failed");
+    } else {
+        printf("NFS4 lock request successful.\n");
+    }
+
+    // 清理资源
+    nfs4_destroy_lock(lock);
+    nfs4_destroy_client(clnt);
+    
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc -o test_case_rpc_alloc_task test_case_rpc_alloc_task.c -I/usr/include/nfs -lnfs4  
+</compile cmd>  

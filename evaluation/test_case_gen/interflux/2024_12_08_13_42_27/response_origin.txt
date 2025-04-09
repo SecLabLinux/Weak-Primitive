@@ -1,0 +1,45 @@
+<think process>  
+为了触发 `taprio_change` 函数的调用，我们需要通过用户态程序模拟一个与内核中 TAPRIO 调度器相关的操作。根据调用栈中的信息，`taprio_change` 函数与 `taprio_init` 和 `init` 函数有关系，其中 `taprio_init` 函数属于网络调度器模块的初始化部分。为了触发 `taprio_change`，我们需要通过用户态操作与网络调度器进行交互，可能涉及到网络接口或网卡的配置。
+
+`taprio_change` 函数的作用可能与修改 TAPRIO 排程器的配置有关。`taprio_init` 则是内核初始化时调用的函数之一，因此用户态程序的目标是模拟一些可能的网络调度操作，如修改一个网络接口的调度策略，或者通过修改 TAPRIO 排程器的配置来间接触发相关函数。
+
+通常，用户态可以使用 `tc`（Traffic Control）工具来设置网络接口的队列调度策略，这也可能触发 TAPRIO 相关函数的调用。
+
+因此，程序的步骤包括：
+1. 初始化一个网络接口（如果没有的话），并使用 `tc` 设置其排程器为 TAPRIO。
+2. 使用系统调用或 `tc` 命令修改接口的排程器配置，从而触发 `taprio_change`。
+
+基于这些假设，我将编写一个用户态程序，它通过调用 `tc` 命令来修改网络接口的调度策略，最终触发内核中的 `taprio_change` 函数。 </think process>
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 假设网卡接口名称为 "eth0"
+    const char *interface = "eth0";
+    char command[256];
+
+    // 配置 taprio 调度器
+    snprintf(command, sizeof(command), "tc qdisc add dev %s root taprio", interface);
+    if (system(command) == -1) {
+        perror("Failed to add taprio qdisc");
+        return 1;
+    }
+
+    // 通过修改 taprio 配置来触发 taprio_change
+    snprintf(command, sizeof(command), "tc qdisc change dev %s root taprio", interface);
+    if (system(command) == -1) {
+        perror("Failed to change taprio qdisc");
+        return 1;
+    }
+
+    printf("TAPRIO scheduler configuration modified successfully.\n");
+    return 0;
+}
+</code>  
+<code name> test_case_taprio.c </code name>  
+<compile cmd>  
+gcc test_case_taprio.c -o test_case_taprio  
+</compile cmd>

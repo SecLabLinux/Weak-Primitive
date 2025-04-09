@@ -1,0 +1,71 @@
+<think process>  
+根据报错信息 `/bin/sh: 1: libc6-dev: not found`，系统提示没有找到 `libc6-dev` 包。首先需要确认一下错误的原因。通常，`libc6-dev` 包是用于开发 C 程序时的标准库头文件，但该报错表明系统尝试执行 `libc6-dev` 包，而它似乎并未正确安装。
+
+根据实际情况，可能是缺少该包或者其安装路径没有被正确设置。因此，我们需要执行安装命令来安装相关的开发库。若您已经确认安装了该依赖库，可以尝试通过 `apt-cache search libc6-dev` 来确认其是否正确安装，并且查看是否有可能是其他版本或路径的问题。
+
+此外，代码中还有一个潜在问题：`move_mount` 并不是标准的系统调用接口，它属于 `move_mount` 系统调用的内核级 API，用户空间通常不会直接使用此函数。应该使用 `syscall` 来发起这个系统调用，或者使用 `mount` 系统调用来模拟类似行为。这样我们在用户空间中调用相关操作。
+
+首先，我们将确认并安装 `libc6-dev` 包，然后修复代码中的调用错误。
+
+</think process>
+
+<pkg install cmd>  
+apt install libc6-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mount.h>
+#include <unistd.h>
+#include <sys/syscall.h>
+
+int main() {
+    const char *source = "/tmp/test_source"; // 原挂载源
+    const char *target = "/tmp/test_target"; // 目标挂载点
+    const char *filesystemtype = "tmpfs";    // 挂载类型
+    unsigned long mountflags = MS_BIND;      // 绑定挂载
+    void *data = NULL;
+
+    // 创建源目录和目标目录
+    if (mkdir(source, 0755) == -1) {
+        perror("mkdir source failed");
+        return 1;
+    }
+    if (mkdir(target, 0755) == -1) {
+        perror("mkdir target failed");
+        return 1;
+    }
+
+    // 执行挂载操作
+    if (mount(source, target, filesystemtype, mountflags, data) == -1) {
+        perror("mount failed");
+        return 1;
+    }
+
+    // 使用 syscall 来执行 move_mount 系统调用
+    // move_mount 的系统调用号是 438
+    if (syscall(SYS_move_mount, source, target, target, filesystemtype, MS_MOVE, NULL) == -1) {
+        perror("move_mount failed");
+        return 1;
+    }
+
+    printf("Move mount operation successful\n");
+
+    // 清理目录
+    if (umount(target) == -1) {
+        perror("umount failed");
+    }
+
+    rmdir(source);
+    rmdir(target);
+
+    return 0;
+}
+</code>
+
+<code name> test_case_move_mount.c </code name>
+
+<compile cmd>  
+gcc test_case_move_mount.c -o test_case_move_mount -lmount  
+</compile cmd>

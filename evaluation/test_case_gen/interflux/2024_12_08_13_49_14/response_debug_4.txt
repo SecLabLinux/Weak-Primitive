@@ -1,0 +1,91 @@
+<think process>  
+根据报错信息 `fatal error: nftnl/nftnl.h: No such file or directory`，编译器无法找到 `nftnl/nftnl.h` 头文件。尽管 `libnftnl-dev` 包已安装，可能出现以下几种情况导致找不到头文件：
+
+1. **头文件路径不在编译器的默认搜索路径中**。尽管 `libnftnl-dev` 已安装，它的头文件可能位于非默认路径下，因此需要在编译时显式指定头文件路径。
+2. **`libnftnl-dev` 包安装未正确完成或路径配置问题**，此时可以通过以下命令检查安装路径：
+   ```bash
+   dpkg -L libnftnl-dev | grep nftnl.h
+   ```
+   如果存在该文件，记下其路径。
+
+3. **默认的头文件路径可能为 `/usr/include/nftnl/`**，可以通过 `-I` 参数在编译命令中显式指定头文件目录。
+
+解决方案是：
+- 检查 `nftnl.h` 文件的安装路径，并确保在编译命令中加入正确的头文件路径。
+- 在编译命令中加上 `-I` 标志来显式指定头文件路径。
+
+</think process>
+
+<pkg install cmd>  
+sudo apt install libnftnl-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <nftnl/nftnl.h>  
+#include <nftnl/rule.h>  
+#include <nftnl/table.h>  
+#include <nftnl/chain.h>  
+#include <nftnl/expr.h>  
+
+int main() {  
+    struct nftnl_table *table;  
+    struct nftnl_chain *chain;  
+    struct nftnl_rule *rule;  
+    int fd;  
+
+    // 创建 nft 表  
+    table = nftnl_table_alloc();  
+    nftnl_table_set_family(table, NFPROTO_IPV4);  
+    nftnl_table_set_name(table, "test_table");  
+
+    fd = open("/proc/net/netfilter/nf_tables", O_RDWR);  
+    if (fd < 0) {  
+        perror("Failed to open nf_tables");  
+        return 1;  
+    }  
+
+    // 添加表  
+    if (nftnl_table_write(table, fd) < 0) {  
+        perror("Failed to add table");  
+        return 1;  
+    }  
+
+    // 创建链  
+    chain = nftnl_chain_alloc();  
+    nftnl_chain_set_table(chain, table);  
+    nftnl_chain_set_name(chain, "test_chain");  
+    if (nftnl_chain_write(chain, fd) < 0) {  
+        perror("Failed to add chain");  
+        return 1;  
+    }  
+
+    // 创建规则  
+    rule = nftnl_rule_alloc();  
+    nftnl_rule_set_chain(rule, chain);  
+    nftnl_rule_set_expr(rule, NULL);  // 可根据需要设置表达式  
+    if (nftnl_rule_write(rule, fd) < 0) {  
+        perror("Failed to add rule");  
+        return 1;  
+    }  
+
+    // 删除规则  
+    if (nftnl_rule_delete(rule, fd) < 0) {  
+        perror("Failed to delete rule");  
+        return 1;  
+    }  
+
+    close(fd);  
+    nftnl_rule_free(rule);  
+    nftnl_chain_free(chain);  
+    nftnl_table_free(table);  
+
+    return 0;  
+}  
+</code>
+
+<compile cmd>  
+gcc -I/usr/include/nftnl -lnftnl test_case_pipapo_clone.c -o test_case_pipapo_clone  
+</compile cmd>  

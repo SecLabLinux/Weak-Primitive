@@ -1,0 +1,50 @@
+<think process>  
+从调用栈来看，我们的目标是触发 `key_alloc` 函数的调用。这个函数位于 `key.c` 文件中，主要的调用路径包括以下几个关键函数：
+
+1. `key_alloc` 被 `key_create_or_update` 调用。
+2. `key_create_or_update` 被 `key_create` 调用。
+3. `key_create` 被 `__do_sys_add_key` 调用。
+4. `__do_sys_add_key` 是 `syscall` 调用的结果。
+
+这意味着，触发 `key_alloc` 需要通过 `sys_add_key` 系统调用。在用户空间，我们可以通过 `keyctl` 系统调用接口来执行此操作。具体来说，可以通过调用 `add_key()` 系统调用来创建一个新的 key。
+
+我们要实现的用户态程序需要使用 `keyctl()` 系统调用，并使用合适的参数来创建一个新的 key，从而触发 `key_alloc` 函数的调用。程序的步骤如下：
+
+1. 使用 `keyctl()` 创建一个新的 key。
+2. 确保 key 类型和描述符正确，触发 `key_create`、`key_create_or_update` 和最终的 `key_alloc`。
+
+此测试用例将通过 `keyctl_add()` 创建一个新的 key，从而模拟并触发内核的 `key_alloc` 函数。  
+</think process>
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/keyctl.h>
+#include <unistd.h>
+
+int main() {
+    key_serial_t keyring;
+    key_serial_t key_id;
+
+    // 创建一个新的keyring（可选）
+    keyring = keyctl_new(KEY_SPEC_THREAD_KEYRING, 0);
+    if (keyring == -1) {
+        perror("keyctl_new failed");
+        exit(1);
+    }
+
+    // 创建一个新的key
+    key_id = add_key("user", "test_key", "key_data", 8, keyring);
+    if (key_id == -1) {
+        perror("add_key failed");
+        exit(1);
+    }
+
+    printf("Created key with ID: %d\n", key_id);
+    return 0;
+}
+</code>  
+<code name> test_case_key_alloc.c </code name>  
+<compile cmd> gcc -o test_case_key_alloc test_case_key_alloc.c </compile cmd>

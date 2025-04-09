@@ -1,0 +1,47 @@
+<think process>  
+根据调用栈，`ovl_read_iter` 是一个内核函数，通常是与文件系统相关的函数，可能涉及到虚拟文件系统（VFS）层的读取操作。我们从调用栈中的路径推测，它会通过文件相关的操作进行调用，而 `read_iter` 函数是一个标准的文件读取接口。
+
+要使内核调用到 `ovl_read_iter`，我们需要通过用户态程序触发一次文件读取操作。`ovl_read_iter` 很可能是与 OverlayFS 相关的，OverlayFS 是 Linux 上的一个联合文件系统，`ovl_read_iter` 可能是处理文件读取时的具体实现。
+
+基于这些信息，用户态程序需要做以下几件事：
+1. **打开一个文件**，这个文件应该位于 OverlayFS 文件系统的挂载点。
+2. **执行文件读取操作**，通过调用 `read()` 或 `pread()` 系统调用，触发内核的 `read_iter` 和进一步的 `ovl_read_iter`。
+
+因此，我们将编写一个用户态程序，该程序会打开一个文件，并对其执行读取操作，触发相关的内核函数调用。
+
+<pkg install cmd>  
+空
+
+<code>  
+#include <stdio.h>  
+#include <fcntl.h>  
+#include <unistd.h>  
+#include <sys/types.h>  
+#include <sys/stat.h>  
+
+int main() {  
+    int fd = open("/path/to/overlayfs/mountpoint/file.txt", O_RDONLY);  
+    if (fd == -1) {  
+        perror("open failed");  
+        return 1;  
+    }  
+    
+    char buffer[1024];  
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer));  
+    if (bytes_read == -1) {  
+        perror("read failed");  
+        close(fd);  
+        return 1;  
+    }  
+    
+    printf("Read %ld bytes from file\n", bytes_read);  
+    close(fd);  
+    return 0;  
+}  
+</code>  
+
+<code name> test_case_ovl_read_iter.c </code name>  
+
+<compile cmd>  
+gcc test_case_ovl_read_iter.c -o test_case_ovl_read_iter  
+</compile cmd>  

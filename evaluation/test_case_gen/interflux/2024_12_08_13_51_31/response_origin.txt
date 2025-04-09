@@ -1,0 +1,39 @@
+<think process>  
+从调用栈中可以看到 `key_alloc` 是我们要触发的内核函数。`key_alloc` 函数会通过调用 `__key_create_or_update`、`key_create` 和最终 `__do_sys_add_key` 来创建和分配一个密钥。这一过程通过系统调用接口（如 `sys_add_key` 或 `sys_request_key`）被触发。我们需要构建一个用户态程序来调用这些系统调用。
+
+为触发 `key_alloc`，我们需要通过 `keyctl` 系统调用或类似的机制（如 `add_key()`）来在内核中注册一个新密钥。`keyctl` 系统调用是一个标准的内核接口，用于操作内核中的密钥，包括创建、查找、删除等。
+
+因此，我们的目标是编写一个 C 语言程序，通过 `keyctl` 系统调用来分配一个新的密钥，间接触发 `key_alloc`。程序需要执行以下操作：
+1. 调用 `keyctl` 创建一个新密钥。
+2. 根据调用栈，可能需要选择合适的密钥类型和密钥数据。
+
+在此过程中，`key_alloc` 会被调用用于分配密钥，并将其与给定的密钥类型和密钥数据相关联。
+
+</think process>
+
+<pkg install cmd>  
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/keyctl.h>
+
+int main() {
+    // 创建一个新的密钥
+    key_serial_t key = add_key("user", "test_key", "test_data", 9, 0);
+    
+    if (key == -1) {
+        perror("add_key");
+        return 1;
+    }
+
+    printf("Key created with ID: %d\n", key);
+    return 0;
+}
+</code>
+
+<code name> test_case_key_alloc.c </code name>
+
+<compile cmd> gcc -o test_case_key_alloc test_case_key_alloc.c -lkernel </compile cmd>

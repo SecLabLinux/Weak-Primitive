@@ -1,0 +1,49 @@
+<think process>  
+要使内核调用 `key_alloc` 函数，我们需要触发一个系统调用路径，该路径会最终进入 `key_alloc` 函数。从调用栈中可以看到，`key_alloc` 是通过多个函数间接调用的，其中包括系统调用函数 `sys_add_key` 和 `sys_request_key`，并通过 `keyctl` 系列函数进行管理。根据这些信息，最直接的触发方式是在用户空间通过 `keyctl` 系列系统调用申请一个新的密钥。
+
+`key_alloc` 是一个内核内部的密钥分配函数，主要通过 `key_create_or_update` 调用来创建新的密钥。我们可以通过一个用户态程序，调用 `keyctl_add_key` 来触发这个过程，间接调用到 `key_alloc`。
+
+因此，我们需要编写一个程序，通过 `keyctl_add_key` 系统调用，传入适当的密钥类型、描述符和密钥数据，以触发内核的密钥分配机制。
+
+以下是详细步骤：
+1. 调用 `keyctl_add_key` 来申请一个新的密钥。
+2. 由于 `keyctl_add_key` 会依赖于系统调用 `sys_add_key`，进而会最终调用 `key_alloc`。
+3. 我们需要确保程序能够成功执行并触发到该内核函数。
+
+此程序的核心目标是通过标准的 `keyctl_add_key` 函数来触发内核的密钥分配逻辑。
+
+</think process>
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/keyctl.h>
+#include <unistd.h>
+
+int main() {
+    key_serial_t keyring;
+    key_serial_t key;
+
+    // Create or get a keyring (keyring is used as the container for the key)
+    keyring = keyctl_alloc(0, 0, 0);
+    if (keyring == -1) {
+        perror("keyctl_alloc");
+        return 1;
+    }
+
+    // Add a key to the keyring
+    key = keyctl_add_key("user", "test_key", "test_value", 11, keyring);
+    if (key == -1) {
+        perror("keyctl_add_key");
+        return 1;
+    }
+
+    printf("Key added successfully, key id: %d\n", key);
+    return 0;
+}
+</code>
+
+<code name> test_case_key_alloc.c </code name>
+
+<compile cmd> gcc test_case_key_alloc.c -o test_case_key_alloc -lkeyutils </compile cmd>

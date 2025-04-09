@@ -1,0 +1,57 @@
+<think process>  
+从错误信息来看，编译器无法找到 `sys/capability.h` 这个头文件。`sys/capability.h` 是与 Linux 能力集（capabilities）相关的头文件，通常它在某些 Linux 发行版上可能需要单独安装相关的开发包。缺少这个头文件意味着可能没有安装必要的库文件或开发包。
+
+1. `sys/capability.h` 头文件提供了对 Linux 能力集（capabilities）管理的接口，但在一些系统上，可能未包含在默认的开发环境中，或者路径没有正确配置。
+2. 确保已经安装了与 Linux 能力集相关的库和头文件。这通常包含在 `libcap-dev` 或类似的包中。需要通过安装相关包来解决头文件路径问题。
+
+为了修复错误，首先需要安装缺少的开发包 `libcap-dev`，它提供了 `sys/capability.h` 文件以及相关的功能。
+
+</think process>
+
+<pkg install cmd>  
+apt install libcap-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <sys/capability.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <linux/securebits.h>
+#include <sys/syscall.h>
+
+#define _GNU_SOURCE
+
+// 结构体用于设置新的能力集
+struct __user_cap_header_struct header;
+struct __user_cap_data_struct data[2];
+
+int main() {
+    // 初始化capset header和数据结构
+    header.pid = getpid();  // 设置为当前进程
+    header.version = _LINUX_CAPABILITY_VERSION_3;
+
+    data[0].effective = CAP_SETPCAP;
+    data[0].permitted = CAP_SETPCAP;
+    data[0].inheritable = 0;
+
+    data[1].effective = 0;
+    data[1].permitted = 0;
+    data[1].inheritable = 0;
+
+    // 调用syscall进行capset
+    if (syscall(SYS_capset, &header, data) == -1) {
+        perror("syscall capset failed");
+        return 1;
+    }
+
+    printf("Successfully called capset\n");
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_capset.c -o test_case_capset -lcap  
+</compile cmd>

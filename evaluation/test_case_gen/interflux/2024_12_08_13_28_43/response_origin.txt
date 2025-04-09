@@ -1,0 +1,55 @@
+<think process>  
+根据提供的调用栈，我们可以看到 `prepare_kernel_cred` 函数在 `cred.c` 文件中定义，并且在多个驱动和模块的加载过程中被间接调用。我们的目标是编写一个用户态程序，触发内核加载过程中的相关操作，从而调用到 `prepare_kernel_cred`。  
+### 分析调用栈
+- `prepare_kernel_cred` 是一个内核函数，用于创建一个 `kernel_cred`（通常是为内核代码提供一个特权凭证）。
+- 从调用栈中可以看到，它最终是由 `request_firmware` 等相关函数触发的。
+- `request_firmware` 函数用于请求加载固件，并且是由多种设备驱动（如 `ath10k`, `btintel` 等）触发的，触发过程中可能涉及到 `request_firmware_nowait`、`request_firmware_direct` 等函数。
+- 最接近 `prepare_kernel_cred` 的调用路径出现在 `ath10k` 设备驱动中，这表明我们可以通过模拟一个固件加载请求来间接触发 `prepare_kernel_cred`。
+
+### 设计用户态程序
+1. **目标：** 编写一个用户态程序，通过 `request_firmware` 来加载固件，这将最终导致调用 `prepare_kernel_cred`。
+2. **方法：** 我们将通过加载固件来模拟设备驱动的加载过程，触发内核加载操作。
+3. **步骤：**
+   - 使用 `request_firmware` 函数请求一个固件（模拟固件请求）。
+   - 需要为 `request_firmware` 提供合适的固件路径。我们可以提供一个不存在的固件路径，来让内核执行固件加载过程，从而可能触发 `prepare_kernel_cred`。
+
+### 用户态程序的具体实现
+我们将使用 `request_firmware` API 来加载一个不存在的固件，这个过程会进入内核的固件请求路径。以下是该用户态程序的示例。
+
+</think process>  
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/firmware.h>
+
+int main() {
+    const char *firmware_name = "non_existent_firmware.bin"; // 固件名称，可以是任何名称
+    const struct firmware *fw = NULL;
+    
+    // 请求固件
+    int ret = request_firmware(&fw, firmware_name, "/lib/firmware");
+    if (ret != 0) {
+        printf("Failed to request firmware: %d\n", ret);
+        return -1;
+    }
+
+    printf("Firmware loaded successfully.\n");
+
+    // 在这里我们可以触发内核函数
+    release_firmware(fw);  // 释放固件资源
+
+    return 0;
+}
+</code>  
+<code name> test_case_prepare_kernel_cred.c </code name>  
+<compile cmd>  
+gcc -o test_case_prepare_kernel_cred test_case_prepare_kernel_cred.c -l firmware -lm  
+</compile cmd>  

@@ -1,0 +1,47 @@
+<think process>  
+根据调用栈，`do_sys_poll` 是内核的系统调用函数，负责处理与 `poll` 相关的操作。要触发这个内核函数，我们需要构造一个用户态程序，使其通过系统调用路径进入 `do_sys_poll` 函数。  
+
+分析调用栈后，我们看到 `do_sys_poll` 最终是由 `sys_poll` 或 `ppoll` 调用的。因此，用户态程序需要调用 `poll()` 或者 `ppoll()`。  
+我们可以通过以下步骤构建测试用例：  
+1. **调用接口**：我们可以选择 `poll()` 或 `ppoll()` 系统调用。在这里我们使用 `poll()`，这是更直接的接口。  
+2. **构建文件描述符集合**：我们需要构造至少一个文件描述符，这样 `poll()` 会进行阻塞等待。  
+3. **阻塞等待**：通过设置适当的超时值，让系统调用进入等待状态，以便触发 `do_sys_poll` 的路径。  
+
+注意，`poll()` 系统调用与信号相关，因此如果没有触发信号或 I/O 事件，它会在超时后返回。为了确保 `do_sys_poll` 被调用，设置一个短暂的超时会更为合适。
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <unistd.h>  
+#include <poll.h>  
+#include <fcntl.h>  
+#include <sys/time.h>  
+
+int main() {  
+    struct pollfd fds[1];  
+    int ret;  
+    struct timeval timeout;  
+    timeout.tv_sec = 1;  // 设置 1 秒的超时
+    timeout.tv_usec = 0;
+
+    // 创建一个空的文件描述符，用于演示 poll
+    fds[0].fd = STDIN_FILENO;  // 使用标准输入（可以替换为实际的文件描述符）
+    fds[0].events = POLLIN;  // 检查是否可读
+
+    ret = poll(fds, 1, timeout.tv_sec * 1000 + timeout.tv_usec / 1000);  // 设置超时值（毫秒）
+    
+    if (ret == -1) {  
+        perror("poll");  
+        exit(EXIT_FAILURE);  
+    } else if (ret == 0) {  
+        printf("Poll timed out\n");  
+    } else {  
+        printf("File descriptor is ready for reading\n");  
+    }  
+
+    return 0;  
+}  
+</code>  
+<code name> test_case_poll.c </code name>  
+<compile cmd> gcc -o test_case_poll test_case_poll.c </compile cmd>

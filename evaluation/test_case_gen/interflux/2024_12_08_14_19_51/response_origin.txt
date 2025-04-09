@@ -1,0 +1,87 @@
+<think process>  
+我们需要编写一个能够触发 `io_get_sq_data` 内核函数调用的用户态程序。根据调用栈分析，`io_get_sq_data` 函数是通过一系列其他内核函数被调用的。特别是它在 `io_uring` 子系统中使用，所以程序的目标应该是成功地创建一个 `io_uring` 实例，并且执行操作使得内核最终调用到 `io_get_sq_data`。
+
+首先，`io_get_sq_data` 是在 `io_sq_offload_create` 函数中调用的，这表明内核需要创建一个 I/O 请求队列并准备一些离线处理。在更上层的函数链中，`io_uring_create` 和 `io_uring_setup` 是负责创建和初始化 io_uring 的主要函数。因此，我们首先需要通过 `io_uring_setup` 来创建 `io_uring` 实例。
+
+其次，通过系统调用路径分析，内核函数的执行是由 `__do_sys_io_uring_setup` 和 `__x64_sys_io_uring_setup` 这些系统调用触发的，这意味着我们要在用户空间程序中通过 `io_uring_setup` 来发起系统调用。
+
+综合以上分析，我们的目标是：
+1. 使用 `io_uring_setup` 来设置并初始化一个 `io_uring` 实例。
+2. 通过用户空间 API 来触发内核中的 `io_get_sq_data` 调用，确保它在内部被正确地调用。
+
+为了实现这一目标，我们将创建一个简单的 `io_uring` 示例程序，其中包含设置 `io_uring`，并执行简单的 I/O 操作。这样可以触发内核调用栈中的一部分，最终到达 `io_get_sq_data`。
+
+<pkg install cmd>  
+apt install liburing-dev
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <fcntl.h>
+#include <liburing.h>
+
+#define QUEUE_DEPTH 1
+#define BLOCK_SIZE 1024
+
+int main() {
+    struct io_uring ring;
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    char buffer[BLOCK_SIZE];
+    int ret;
+
+    // 初始化 io_uring 实例
+    ret = io_uring_queue_init(QUEUE_DEPTH, &ring, 0);
+    if (ret) {
+        fprintf(stderr, "io_uring_queue_init failed: %d\n", ret);
+        return 1;
+    }
+
+    // 准备一个简单的 I/O 操作
+    memset(buffer, 'A', BLOCK_SIZE);  // 将 buffer 填充为 'A'
+
+    sqe = io_uring_get_sqe(&ring);
+    if (!sqe) {
+        fprintf(stderr, "io_uring_get_sqe failed\n");
+        return 1;
+    }
+
+    // 将一个简单的写操作添加到提交队列
+    io_uring_prep_write(sqe, STDOUT_FILENO, buffer, BLOCK_SIZE, 0);
+
+    // 提交并等待完成
+    ret = io_uring_submit(&ring);
+    if (ret < 0) {
+        fprintf(stderr, "io_uring_submit failed: %d\n", ret);
+        return 1;
+    }
+
+    // 获取完成队列中的结果
+    ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret) {
+        fprintf(stderr, "io_uring_wait_cqe failed: %d\n", ret);
+        return 1;
+    }
+
+    // 输出操作的结果
+    if (cqe->res < 0) {
+        fprintf(stderr, "I/O failed: %d\n", cqe->res);
+        return 1;
+    }
+
+    printf("I/O operation completed successfully\n");
+
+    // 释放资源
+    io_uring_cqe_seen(&ring, cqe);
+    io_uring_queue_exit(&ring);
+
+    return 0;
+}
+<code name> test_case_io_get_sq_data.c </code name>  
+
+<compile cmd>  
+gcc -o test_case_io_get_sq_data test_case_io_get_sq_data.c -luring  
+</compile cmd>  

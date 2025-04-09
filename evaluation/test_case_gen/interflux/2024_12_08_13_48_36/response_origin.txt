@@ -1,0 +1,64 @@
+<think process>  
+根据提供的内核函数调用栈，目标是编写一个用户态程序，通过特定的操作来触发内核函数的调用。我们从内核栈分析可以看到 `pipapo_clone` 是栈的最上层调用，它依赖于 `pipapo_maybe_clone`，进而可能涉及到 `nft_pipapo_deactivate`、`nft_pipapo_insert` 和 `nft_pipapo_walk` 等多个函数。根据这些信息，我们首先需要了解这些函数是如何相互关联的，特别是如何通过用户态代码调用到这些内核接口。
+
+1. **pipapo_clone**: 这个函数通常涉及到克隆操作，在网络过滤相关的上下文中，可能和 `nft` 子系统相关。
+2. **pipapo_maybe_clone**: 根据栈信息，调用 `pipapo_clone` 之前可能会先调用这个函数，它决定是否需要克隆某些资源或对象。
+3. **nft_pipapo_deactivate**: 这可能是一个取消激活或清理操作。
+4. **nft_pipapo_insert**: 插入操作，可能是向 `nft` 子系统插入某些数据。
+5. **nft_pipapo_walk**: 遍历操作，可能是对 `nft` 表项的遍历。
+
+这些函数显然属于 `netfilter` 系统的内核接口，因此用户态程序需要与 `netfilter` 相关的接口进行交互，可能是通过使用 `nft` 命令或通过编程接口进行相关操作。我们会利用 `nft` 命令或者 `libmnl` 等库来触发这些内核函数的调用。我们可以模拟一个操作，插入一个规则或表项，并通过合适的调用使内核进入这些函数路径。
+
+测试用例的步骤如下：
+- 使用 `nft` 命令来配置 `nft` 表项（例如插入一个规则），这将触发内核栈中的 `nft_pipapo_insert` 和 `nft_pipapo_walk`。
+- 通过某些特定的操作，可能会触发 `nft_pipapo_deactivate`。
+
+通过插入并激活一条 `nft` 规则并使其进行操作，最终可以触发 `pipapo_clone` 函数。
+
+<pkg install cmd>  
+libmnl-dev
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <mnl/mnl.h>
+
+int main() {
+    struct mnl_socket *nl;
+    char buf[MNL_SOCKET_BUFFER_SIZE];
+    int ret;
+
+    nl = mnl_socket_open(NETLINK_NETFILTER);
+    if (nl == NULL) {
+        perror("mnl_socket_open");
+        return 1;
+    }
+
+    if (mnl_socket_bind(nl, 0, MNL_SOCKET_AUTOPID) < 0) {
+        perror("mnl_socket_bind");
+        return 1;
+    }
+
+    // 构造并插入一个简单的 nft 规则（使用 nftables API）
+    // 这里简化，具体命令可能需要更多复杂的配置
+    const char *nft_command = "nft add rule ip filter input ip daddr 192.168.1.1 counter accept";
+
+    ret = system(nft_command);
+    if (ret != 0) {
+        perror("system");
+        return 1;
+    }
+
+    printf("nft rule added, this should trigger pipapo_clone\n");
+
+    mnl_socket_close(nl);
+    return 0;
+}
+<code>  
+
+<code name> test_case_nft_pipapo_clone.c </code name>
+
+<compile cmd>  
+gcc -o test_case_nft_pipapo_clone test_case_nft_pipapo_clone.c -lmnl
+</compile cmd>

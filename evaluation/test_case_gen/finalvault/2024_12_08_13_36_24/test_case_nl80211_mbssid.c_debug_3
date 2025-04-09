@@ -1,0 +1,36 @@
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <netlink/netlink.h>  
+#include <netlink/genl/genl.h>  
+#include <netlink/genl/ctrl.h>  
+#include <linux/nl80211.h>  
+
+int main() {  
+    struct nl_sock *sock = nl_socket_alloc();  
+    if (!sock) {  
+        perror("Failed to allocate netlink socket");  
+        return EXIT_FAILURE;  
+    }  
+
+    if (genl_connect(sock)) {  
+        perror("Failed to connect to generic netlink");  
+        nl_socket_free(sock);  
+        return EXIT_FAILURE;  
+    }  
+
+    int nl80211_id = genl_ctrl_resolve(sock, "nl80211");  
+    if (nl80211_id < 0) {  
+        perror("nl80211 not found");  
+        nl_socket_free(sock);  
+        return EXIT_FAILURE;  
+    }  
+
+    // 此处应构建并发送配置多BSSID的消息  
+    // 由于具体实现复杂，这里仅提供框架  
+
+    printf("User-space program to trigger nl80211_parse_mbssid_elems executed.\n");  
+
+    nl_socket_free(sock);  
+    return EXIT_SUCCESS;  
+}

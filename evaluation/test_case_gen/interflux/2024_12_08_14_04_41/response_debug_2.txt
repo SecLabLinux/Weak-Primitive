@@ -1,0 +1,78 @@
+<think process>  
+根据错误提示，`apt` 无法找到 `libnfs4-dev` 包，提示 `E: Unable to locate package libnfs4-dev`，这说明该包在你的源列表中并不存在，或者包名可能错误。实际上，`libnfs4-dev` 是不存在的，正确的包名应该是 `libnfs-dev`，它包含了与 NFS 4.x 相关的开发库和头文件。
+
+因此，首先应该确保你的 `apt` 包管理器使用了正确的源，并且安装了正确的 `libnfs-dev` 包。确认 NFS 相关的开发包已经正确安装。
+
+步骤如下：
+1. 使用 `apt update` 更新包源列表。
+2. 安装正确的 `libnfs-dev` 开发包。
+3. 如果仍然无法找到该包，可能需要添加额外的源，或者使用 `libnfs` 的源码构建。
+
+</think process>
+
+<pkg install cmd>  
+apt update  
+apt install libnfs-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <nfs/nfs4.h>
+#include <nfs/nfs.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <server> <file>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    const char *server = argv[1];
+    const char *filename = argv[2];
+
+    // 创建 NFS 客户端
+    struct nfs_client *clnt;
+    clnt = nfs_client_create(server, 2049, 0, 0);
+    if (clnt == NULL) {
+        perror("Failed to create NFS client");
+        exit(EXIT_FAILURE);
+    }
+
+    // 打开文件
+    nfsfh4 file_handle;
+    int result = nfs4_open(clnt, filename, O_RDONLY, &file_handle);
+    if (result != 0) {
+        fprintf(stderr, "Failed to open file: %s\n", filename);
+        nfs_client_destroy(clnt);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("File %s opened successfully\n", filename);
+
+    // 进行简单的读取操作
+    char buffer[1024];
+    result = nfs4_read(clnt, &file_handle, 0, 1024, buffer);
+    if (result < 0) {
+        fprintf(stderr, "Failed to read from file\n");
+        nfs4_close(clnt, &file_handle);
+        nfs_client_destroy(clnt);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Read %d bytes from file\n", result);
+
+    // 关闭文件
+    nfs4_close(clnt, &file_handle);
+
+    // 销毁客户端
+    nfs_client_destroy(clnt);
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc -o test_case_rpc_alloc_task test_case_rpc_alloc_task.c -lnfs  
+</compile cmd>

@@ -1,0 +1,66 @@
+<think process>  
+首先，我们从调用栈开始分析。内核函数 `__build_xattrs` 是通过一系列函数调用链被触发的。这个函数链主要与文件系统和属性（xattr）操作有关。我们可以看到以下几个关键点：
+
+1. `__build_xattrs` 函数本身通常是被 `ceph_getxattr`、`ceph_setxattr` 等函数调用，它们实现了 Ceph 文件系统的扩展属性（xattr）的获取和设置。
+2. 该函数的调用链从 `ceph_getxattr` 和 `ceph_setxattr` 出发，它们分别调用了 `ceph_get_acl` 和 `ceph_set_acl` 进行文件 ACL 的获取和设置。
+3. 由于涉及到 xattr 操作，还可以通过 `ceph_listxattr` 函数来列出当前对象的扩展属性。
+4. 从代码中可以看出这些函数涉及的文件包括 `dir.c`、`inode.c` 和 `xattr.c`，其中与 inode 相关的操作是获取或设置文件系统的元数据。
+
+因此，针对测试用例的编写，我们需要关注如何通过用户态程序触发这些内核函数。在 Linux 下，与扩展属性（xattr）相关的操作主要是通过 `getxattr`、`setxattr` 和 `listxattr` 系统调用实现的，而 `ceph_getxattr` 和 `ceph_setxattr` 是 Ceph 文件系统实现的自定义处理函数。所以，我们的测试用例需要：
+
+- 创建一个支持 Ceph 文件系统的文件。
+- 对该文件进行扩展属性的获取和设置操作。
+- 通过这些操作触发到内核层面，进而调用 `__build_xattrs` 及其上游函数。
+
+因此，测试用例需要使用 `setxattr` 和 `getxattr` 系统调用，来模拟对文件的扩展属性操作。
+
+我们接下来的步骤是创建一个简单的用户态程序，通过调用 `setxattr` 来设置扩展属性，然后通过 `getxattr` 来获取这些属性，最终触发内核的相关函数链。
+
+<pkg install cmd>  
+libc-dev
+
+<code>
+#include <stdio.h>
+#include <string.h>
+#include <sys/types.h>
+#include <sys/xattr.h>
+#include <fcntl.h>
+#include <unistd.h>
+
+int main() {
+    const char *file_path = "/tmp/testfile";
+    const char *attr_name = "user.testattr";
+    const char *attr_value = "testvalue";
+
+    // 创建文件
+    int fd = open(file_path, O_CREAT | O_WRONLY, 0644);
+    if (fd == -1) {
+        perror("open");
+        return 1;
+    }
+    close(fd);
+
+    // 设置扩展属性
+    if (setxattr(file_path, attr_name, attr_value, strlen(attr_value), 0) == -1) {
+        perror("setxattr");
+        return 1;
+    }
+
+    // 获取扩展属性
+    char value[256];
+    ssize_t len = getxattr(file_path, attr_name, value, sizeof(value));
+    if (len == -1) {
+        perror("getxattr");
+        return 1;
+    }
+
+    value[len] = '\0';  // 确保字符串终止
+    printf("Attribute value: %s\n", value);
+
+    return 0;
+}
+<code name> test_case_xattr.c </code name>
+
+<compile cmd>  
+gcc test_case_xattr.c -o test_case_xattr -lattr  
+</compile cmd>

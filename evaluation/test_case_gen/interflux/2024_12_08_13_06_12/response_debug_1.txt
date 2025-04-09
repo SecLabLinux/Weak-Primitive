@@ -1,0 +1,64 @@
+<think process> 
+根据错误信息，我们可以逐步分析并解决问题：
+
+1. **`unshare` 函数未声明：**  
+   编译器提示 `unshare` 函数是隐式声明的，这意味着缺少相关头文件或没有正确包含其声明。`unshare` 函数定义在 `<sched.h>` 中，而这个头文件已被包含，但可能是需要使用其他特定的宏或扩展。实际上，`unshare` 函数可能需要 `#include <sys/mount.h>` 或 `#include <linux/sched.h>` 来确保相关的宏和常量被定义。
+
+2. **`CLONE_NEWCGROUP` 未定义：**  
+   `CLONE_NEWCGROUP` 是 Linux 内核提供的常量，通常定义在 `<sched.h>` 中，但在某些版本中可能需要额外的头文件，如 `<linux/sched.h>`。这意味着需要确认系统是否支持此常量以及是否包含了相应的头文件。
+
+3. **`wait` 函数未声明：**  
+   `wait` 是一个进程管理函数，定义在 `<sys/wait.h>` 中。缺少这个头文件是导致错误的原因。
+
+总结：需要添加额外的头文件，并确保相关常量和函数的声明正确引入。
+
+</think process>
+
+<pkg install cmd> 
+
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>  // 为 wait 函数添加头文件
+#include <sched.h>
+#include <sys/syscall.h>
+#include <linux/unistd.h>
+#include <linux/sched.h>  // 为 CLONE_NEWCGROUP 添加头文件
+
+int main() {
+    // 使用 unshare 创建一个新的 cgroup 命名空间
+    printf("Unsharing the cgroup namespace...\n");
+    if (unshare(CLONE_NEWCGROUP) == -1) {
+        perror("unshare");
+        return 1;
+    }
+
+    // 在新的命名空间中创建一个子进程
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // 子进程
+        printf("In child process with new cgroup namespace.\n");
+        // 可以在这里进行一些额外的命名空间操作
+        sleep(5);  // 模拟子进程工作
+    } else {
+        // 父进程
+        printf("In parent process.\n");
+        wait(NULL);  // 等待子进程退出
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd> 
+gcc -o test_case_alloc_cgroup_ns test_case_alloc_cgroup_ns.c -Wall
+</compile cmd>

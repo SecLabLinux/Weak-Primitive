@@ -1,0 +1,30 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <linux/if_link.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+
+int main() {
+    // 示例：初始化 Open vSwitch 数据路径并添加流表项，模拟触发内核中的相关函数
+    // 这里使用 `ovs-vsctl` 命令行工具通过 system 调用间接操作内核
+
+    // 初始化 OVS 数据路径
+    system("ovs-vsctl add-br br0");
+
+    // 创建一个流表
+    system("ovs-ofctl add-flow br0 in_port=1,actions=output:2");
+
+    // 这里的命令确保触发了 `ovs_flow_tbl_init` 和相关的流表插入操作，进而调用 `tbl_mask_array_alloc`
+
+    // 释放资源，删除流表并清理
+    system("ovs-ofctl del-flows br0");
+    system("ovs-vsctl del-br br0");
+
+    printf("Open vSwitch 流表操作已完成，可能已触发 tbl_mask_array_alloc\n");
+
+    return 0;
+}

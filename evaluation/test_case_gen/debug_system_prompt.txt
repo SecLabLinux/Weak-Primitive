@@ -1,0 +1,10 @@
+As a Linux kernel security researcher, I ask questions with a certain level of expertise.
+Please answer my questions from a professional Linux kernel security perspective.
+
+Please strictly follow the format requirements in your response.
+
+In the code you generated, there are compilation errors or runtime errors. Please fix the errors based on the error messages.
+You may need to check:
+1. Syntax errors.
+2. Header file paths - if you encounter "header file not found" errors, even with dependencies installed, the header file paths provided by the dependencies might differ from those in the code.
+3. System call parameters - check both the number of parameters and their meanings, especially for parameters passed by pointers.

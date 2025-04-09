@@ -1,0 +1,77 @@
+<think process>  
+根据提供的调用栈，`ip_mc_msfilter` 函数位于 `do_ip_setsockopt` 调用链中。该函数属于设置多播组成员过滤的功能。通过调用链可知，`ip_mc_msfilter` 是 `setsockopt` 系列函数的一部分，并且涉及到多种协议的 socket 选项设置。为了触发 `ip_mc_msfilter`，我们需要使用 `setsockopt` 来设置相关的多播过滤选项。
+
+根据调用栈，`do_ip_setsockopt` 函数会间接调用 `ip_mc_msfilter`，并且 `setsockopt` 系列的调用也会先调用 `mptcp_setsockopt_v4` 和 `raw_setsockopt` 等函数，因此目标是通过 `setsockopt` 来模拟与内核相关的调用。  
+我们可以通过设置 socket 的一些特定选项，如多播设置，来间接触发 `ip_mc_msfilter`。
+
+目标是构建一个简单的用户态程序，使用 socket 编程来设置 IP 多播的选项，这样就能触发 `ip_mc_msfilter` 函数的调用。
+
+**关键步骤：**  
+1. 创建一个原始套接字或多播套接字。
+2. 设置多播相关的选项，尤其是 `IP_ADD_MEMBERSHIP` 和 `IP_DROP_MEMBERSHIP`。
+3. 通过 `setsockopt` 设置这些选项，这会触发内核中 `do_ip_setsockopt` 进一步调用 `ip_mc_msfilter`。
+
+接下来，我将编写一个简单的 C 语言测试用例，通过 `setsockopt` 调用来触发该调用链。
+
+</think process>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+
+#define MULTICAST_ADDR "239.255.255.250"
+#define MULTICAST_PORT 1900
+
+int main() {
+    int sockfd;
+    struct sockaddr_in addr;
+    struct ip_mreq mreq;
+
+    // 创建一个 UDP 套接字
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    // 设置 socket 地址为多播组地址和端口
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_port = htons(MULTICAST_PORT);
+
+    // 将套接字绑定到多播组
+    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
+        perror("Bind failed");
+        close(sockfd);
+        return 1;
+    }
+
+    // 设置加入多播组选项
+    mreq.imr_multiaddr.s_addr = inet_addr(MULTICAST_ADDR);
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);
+
+    if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("Setsockopt IP_ADD_MEMBERSHIP failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Successfully joined multicast group %s\n", MULTICAST_ADDR);
+
+    // 发送一些数据或等待，以确保触发内核的相关调用
+    // 在这里可以模拟数据接收或等待，确保内核会处理设置的多播过滤器
+
+    close(sockfd);
+    return 0;
+}
+</code>  
+
+<code name> test_case_ip_mc_msfilter.c </code name>
+
+<compile cmd> gcc -o test_case_ip_mc_msfilter test_case_ip_mc_msfilter.c </compile cmd>

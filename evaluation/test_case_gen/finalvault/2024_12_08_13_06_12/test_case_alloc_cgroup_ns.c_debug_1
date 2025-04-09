@@ -1,0 +1,38 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>  // 为 wait 函数添加头文件
+#include <sched.h>
+#include <sys/syscall.h>
+#include <linux/unistd.h>
+#include <linux/sched.h>  // 为 CLONE_NEWCGROUP 添加头文件
+
+int main() {
+    // 使用 unshare 创建一个新的 cgroup 命名空间
+    printf("Unsharing the cgroup namespace...\n");
+    if (unshare(CLONE_NEWCGROUP) == -1) {
+        perror("unshare");
+        return 1;
+    }
+
+    // 在新的命名空间中创建一个子进程
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // 子进程
+        printf("In child process with new cgroup namespace.\n");
+        // 可以在这里进行一些额外的命名空间操作
+        sleep(5);  // 模拟子进程工作
+    } else {
+        // 父进程
+        printf("In parent process.\n");
+        wait(NULL);  // 等待子进程退出
+    }
+
+    return 0;
+}

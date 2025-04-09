@@ -1,0 +1,55 @@
+<think process>  
+从错误提示来看，系统提示 `/bin/sh: 1: libc6-dev: not found`，这意味着 `libc6-dev` 这个开发库没有被正确安装。这个错误通常发生在编译时找不到相关头文件或库时。你提到已经安装了 `libc6-dev`，但可能是因为在某些系统上没有正确识别它，或者是系统路径的问题。
+
+考虑到我们要编译的代码依赖于 `libc` 提供的标准库（如 `mount` 和 `umount` 系统调用），`libc6-dev` 是必须的，但错误表明它未能正确安装。为了修复此问题，我们可以首先尝试确保库和头文件路径正确，并检查是否安装了所需的包。
+
+其次，`mkdir`, `mount`, `umount` 这些函数在大多数 Linux 系统上都是可以直接调用的，应该不需要特别的调整。
+
+我将修改的重点是确保所需的开发库能够被正确安装，然后通过正确的编译命令进行编译。
+
+</think process>
+
+<pkg install cmd> 
+apt install libc-dev
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/mount.h>
+#include <sys/stat.h>  // 包含 mkdir 函数定义
+
+int main() {
+    const char *nfs_server = "192.168.1.100:/nfs_share";  // NFS 服务器地址
+    const char *mount_point = "/mnt/nfs";  // 挂载点
+
+    // 创建挂载点目录
+    if (mkdir(mount_point, 0777) == -1) {
+        perror("mkdir");
+        return 1;
+    }
+
+    // 执行挂载操作，模拟 NFS 客户端的挂载过程
+    if (mount(nfs_server, mount_point, "nfs", 0, NULL) == -1) {
+        perror("mount");
+        return 1;
+    }
+
+    printf("NFS mount successful. Triggered RPC client creation.\n");
+
+    // 卸载操作，模拟卸载 NFS 文件系统
+    if (umount(mount_point) == -1) {
+        perror("umount");
+        return 1;
+    }
+
+    printf("NFS umount successful.\n");
+
+    return 0;
+}
+</code>
+
+<compile cmd>
+gcc -o test_case_rpc_new_client test_case_rpc_new_client.c
+</compile cmd>

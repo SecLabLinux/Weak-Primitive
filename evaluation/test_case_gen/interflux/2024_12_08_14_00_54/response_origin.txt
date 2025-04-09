@@ -1,0 +1,84 @@
+<think process>  
+从内核调用栈的分析来看，`sctp_transport_new` 是与 SCTP (Stream Control Transmission Protocol) 相关的函数，而整个调用栈中的其他函数则涉及到 SCTP 连接、参数处理、状态机操作等。为了让内核调用到 `sctp_transport_new` 函数，我们需要在用户态程序中触发一个适当的 SCTP 连接过程，从而进入到内核中的 `sctp_transport_new` 函数。
+
+- `sctp_transport_new` 可能是一个用于初始化新的 SCTP 传输（如一个新的传输通道或路径）的函数，通常发生在 SCTP 连接的建立阶段。
+- 要调用到这个函数，可以通过创建一个 SCTP 套接字、设置相关参数并尝试与远程主机建立连接，从而触发内核中的 SCTP 状态机和路径初始化。
+
+步骤：
+1. 创建一个 SCTP 套接字并绑定到本地端口。
+2. 设置连接参数（如远程目标地址）。
+3. 通过 `sctp_connectx` 或类似函数触发连接过程，内核会在合适的地方调用到 `sctp_transport_new`。
+4. 在连接过程中，内核会通过一系列的状态转换函数（如 `sctp_assoc_add_peer` 和 `sctp_connect_add_peer`）处理连接，最终可能会调用 `sctp_transport_new` 来处理新的 SCTP 传输通道。
+
+因此，测试用例的设计目标是通过创建并连接一个 SCTP 套接字来触发 `sctp_transport_new` 的调用。
+
+</think process>
+
+<pkg install cmd>  
+apt install libsctp-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/sctp.h>
+
+int main() {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    struct sctp_initmsg initmsg;
+
+    // 创建 SCTP 套接字
+    sockfd = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    // 配置 server 地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(36412);  // 示例端口
+    server_addr.sin_addr.s_addr = inet_addr("127.0.0.1");
+
+    // 设置 SCTP 初始化参数
+    memset(&initmsg, 0, sizeof(initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    // 将 SCTP 初始化信息传递给套接字
+    if (setsockopt(sockfd, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {
+        perror("setsockopt SCTP_INITMSG");
+        close(sockfd);
+        return -1;
+    }
+
+    // 连接到服务器
+    if (connect(sockfd, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("connect");
+        close(sockfd);
+        return -1;
+    }
+
+    printf("SCTP connection established, triggering sctp_transport_new.\n");
+
+    // 在此可以发送/接收数据来进一步触发相关的内核路径
+
+    // 关闭套接字
+    close(sockfd);
+
+    return 0;
+}
+</code>
+
+<code name> test_case_sctp_transport_new.c </code name>
+
+<compile cmd>  
+gcc -o test_case_sctp_transport_new test_case_sctp_transport_new.c -lsctp  
+</compile cmd>

@@ -1,0 +1,18 @@
+config VULN_INJECTION
+	tristate "Vuln Injection For Testing"
+	help
+	  Turn on Vuln Injection For Testing.
+	  Do not turn on this option in production kernel.
+	default m
+
+config TEST_IPI
+	bool "Vuln Test For IPI"
+	help
+	  Do not turn on this option in production kernel.
+	default y
+
+config TEST_HRTIMER
+	bool "Vuln Test For Hrtimer"
+	help
+	  Do not turn on this option in production kernel.
+	default y

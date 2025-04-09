@@ -1,0 +1,70 @@
+<think process>  
+从调用栈分析，`fanotify_add_new_mark` 是一个内核中的函数，主要作用是在 `fanotify` 系统中添加一个新的标记（mark）。这一过程涉及多个内核层次的函数，包括 `fanotify_add_mark` 和 `do_fanotify_mark`。它的工作原理是通过调用 `sys_fanotify_mark` 系统调用与内核进行交互。该系统调用在用户空间的调用路径最终调用了 `fanotify_add_new_mark`。  
+
+根据调用栈的分析，我们需要让用户态程序通过 `sys_fanotify_mark` 系统调用来触发内核中 `fanotify_add_new_mark` 的执行。这个调用涉及到对 `fanotify` 文件系统进行操作，通常是通过指定要监视的文件或目录以及监控类型（比如事件类型：读、写、打开等）来实现。
+
+为了模拟这种场景，我们可以编写一个用户态程序，使用 `fanotify` API 添加标记。我们需要使用 `fanotify_mark` 系统调用来指定我们希望监控的文件或者目录以及要关注的事件类型，并通过这个调用触发相应的内核路径，从而调用到 `fanotify_add_new_mark`。
+
+具体步骤如下：
+1. 使用 `fanotify_init` 初始化一个 `fanotify` 实例。
+2. 使用 `fanotify_mark` 来指定需要监视的文件或目录以及事件类型。
+3. 捕获事件并打印结果。  
+
+我们将重点放在如何通过 `fanotify_mark` 系统调用触发内核中的相关函数，特别是 `fanotify_add_new_mark`。
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/inotify.h>
+#include <linux/fanotify.h>
+#include <errno.h>
+
+int main() {
+    int fan_fd, result;
+    struct fanotify_event_metadata buf;
+
+    // 初始化fanotify实例
+    fan_fd = fanotify_init(FAN_CLOEXEC | FAN_NONBLOCK, O_RDONLY);
+    if (fan_fd == -1) {
+        perror("fanotify_init failed");
+        return 1;
+    }
+
+    // 给特定目录添加监控标记
+    result = fanotify_mark(fan_fd, FAN_MARK_ADD | FAN_MARK_FLUSH, FAN_OPEN | FAN_ACCESS, AT_FDCWD, "/tmp");
+    if (result == -1) {
+        perror("fanotify_mark failed");
+        close(fan_fd);
+        return 1;
+    }
+
+    // 事件处理循环
+    while (1) {
+        ssize_t len = read(fan_fd, &buf, sizeof(buf));
+        if (len == -1) {
+            if (errno != EAGAIN) {
+                perror("read failed");
+                break;
+            }
+        } else if (len == 0) {
+            printf("No event\n");
+        } else {
+            if (buf.mask & FAN_OPEN) {
+                printf("File opened in /tmp\n");
+            }
+            if (buf.mask & FAN_ACCESS) {
+                printf("File accessed in /tmp\n");
+            }
+        }
+    }
+
+    close(fan_fd);
+    return 0;
+}
+<code name> test_case_fanotify.c </code name>  
+<compile cmd> gcc test_case_fanotify.c -o test_case_fanotify -lacl </compile cmd>

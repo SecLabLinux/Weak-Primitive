@@ -1,0 +1,88 @@
+<think process>
+从报错信息来看，错误提示 "/bin/sh: 1: libpcap-dev: not found" 表示找不到 `libpcap-dev` 依赖。这表明，在系统中并没有安装该开发库。虽然这不是导致代码编译失败的直接原因，但可以影响代码的编译和运行，特别是如果程序在某些部分需要 `libpcap` 库的支持（例如网络数据捕获和分析）。
+
+不过，当前的 C 语言代码并没有直接依赖 `libpcap`，且它并没有实际使用 `libpcap` 库的功能。这个问题是由于错误的依赖安装命令。我们不需要 `libpcap-dev` 库来编译和运行 `test_case_xfrm_state_alloc.c`。`libpcap-dev` 是一个与网络包捕获相关的库，但在这个测试用例中，代码只涉及 `PF_KEY` 套接字，因此我们无需引入这个库。
+
+因此，解决方案是删除编译命令中的 `libpcap-dev`，并确保代码可以正确地编译与运行。由于这个库不需要，也就不需要在编译时链接它。
+
+</think process>
+
+<pkg install cmd> 
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <linux/pfkeyv2.h>
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
+int main() {
+    int sock, ret;
+    struct sadb_msg msg;
+    struct sadb_sa sa;
+    struct sockaddr_in sa_local, sa_remote;
+
+    // 创建 PF_KEY 套接字
+    sock = socket(PF_KEY, SOCK_RAW, PF_KEY_V2);
+    if (sock < 0) {
+        perror("socket failed");
+        return 1;
+    }
+
+    // 初始化消息结构体
+    memset(&msg, 0, sizeof(msg));
+    msg.sadb_msg_version = PF_KEY_V2;
+    msg.sadb_msg_type = SADB_ADD;
+    msg.sadb_msg_len = sizeof(msg) / 8 + sizeof(sa) / 8;
+    msg.sadb_msg_satype = SADB_X_CFG_DFLT;
+    msg.sadb_msg_seq = 1;
+    msg.sadb_msg_pid = getpid();
+
+    // 初始化安全关联
+    memset(&sa, 0, sizeof(sa));
+    sa.sadb_sa_len = sizeof(sa) / 8;
+    sa.sadb_sa_spi = htonl(0x10001);  // 设置 SPI
+    sa.sadb_sa_auth = SADB_AH_ALG_HMAC_SHA1;
+    sa.sadb_sa_encrypt = SADB_EALG_NULL;
+
+    // 配置源和目的地址
+    memset(&sa_local, 0, sizeof(sa_local));
+    sa_local.sin_family = AF_INET;
+    sa_local.sin_port = 0;
+    sa_local.sin_addr.s_addr = inet_addr("192.168.0.1");
+
+    memset(&sa_remote, 0, sizeof(sa_remote));
+    sa_remote.sin_family = AF_INET;
+    sa_remote.sin_port = 0;
+    sa_remote.sin_addr.s_addr = inet_addr("192.168.0.2");
+
+    // 发送 PF_KEY 消息
+    ret = send(sock, &msg, sizeof(msg), 0);
+    if (ret < 0) {
+        perror("send failed");
+        close(sock);
+        return 1;
+    }
+
+    ret = send(sock, &sa, sizeof(sa), 0);
+    if (ret < 0) {
+        perror("send failed");
+        close(sock);
+        return 1;
+    }
+
+    // 关闭套接字
+    close(sock);
+    printf("PF_KEY message sent\n");
+
+    return 0;
+}
+</code>
+
+<compile cmd>
+gcc -o test_case_xfrm_state_alloc test_case_xfrm_state_alloc.c
+</compile cmd>

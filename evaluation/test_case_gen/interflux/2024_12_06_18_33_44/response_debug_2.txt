@@ -1,0 +1,123 @@
+> 正在思考
+**更新include路径**
+指导用户安装libnl-3-dev和libnl-genl-3-dev后，提议检查include路径是否正确设置。目前的错误可能是因为netlink/netlink.h的路径错误。
+**探索替代路径**
+考察其他路径如<libnl3/netlink/netlink.h>，通常libnl-3-dev头文件安装在/usr/include/libnl3。可能需要调整编译命令以适配正确的include路径。
+**调整编译命令**
+建议用户使用pkg-config设置include路径和链接库。这会保持代码的通用性，同时避免不必要的更改。
+**调整编译命令**
+指出include路径错误，建议指定-I/usr/include/libnl3修正。用户可选择使用pkg-config。
+**确认include路径**
+libnl-3-dev安装后，/usr/include/libnl3包含头文件。建议在编译命令中指定-I/usr/include/libnl3，以确保include路径正确无误。
+思考，持续 6 秒
+
+<think process>
+编译错误提示 `fatal error: netlink/netlink.h: No such file or directory` 表明编译器无法找到 `netlink/netlink.h` 头文件。尽管已经安装了 `libnl-3-dev` 和 `libnl-genl-3-dev`，这些头文件通常位于 `/usr/include/libnl3/netlink/netlink.h`。因此，需要在编译时指定包含路径 `-I/usr/include/libnl3`，以便编译器能够找到正确的头文件。此外，确保在链接阶段包含所有必要的库，如 `libnl-3`、`libnl-genl-3` 和 `libnftnl`。
+</think process>
+<pkg install cmd>
+apt install libnl-3-dev libnl-genl-3-dev
+</pkg install cmd>
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netlink/netlink.h>
+#include <netlink/msg.h>
+#include <netlink/genl/genl.h>
+#include <nftnl/table.h>
+#include <nftnl/chain.h>
+#include <nftnl/rule.h>
+
+int main() {
+    struct nl_sock *sock;
+    int family;
+    int ret;
+
+    // 初始化Netlink套接字
+    sock = nl_socket_alloc();
+    if (!sock) {
+        fprintf(stderr, "Failed to allocate netlink socket.\n");
+        return -1;
+    }
+
+    if (genl_connect(sock)) {
+        fprintf(stderr, "Failed to connect to generic netlink.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    family = genl_ctrl_resolve(sock, "nftables");
+    if (family < 0) {
+        fprintf(stderr, "Failed to resolve nftables family.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 创建一个新的表
+    struct nftnl_table *table;
+    char *table_name = "test_table";
+    table = nftnl_table_alloc();
+    nftnl_table_set_str(table, NFTNL_TABLE_NAME, table_name);
+    nftnl_table_set_u32(table, NFTNL_TABLE_FAMILY, NFPROTO_IPV4);
+
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_table_nlmsg_build_hdr(msg, family, NFT_MSG_NEWTABLE, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_table_nlmsg_build_payload(msg, table);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send table creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_table_free(table);
+
+    // 创建一个新的链
+    struct nftnl_chain *chain;
+    char *chain_name = "test_chain";
+    chain = nftnl_chain_alloc();
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table_name);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_HOOKNUM, NF_INET_PRE_ROUTING);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_POLICY, NFT_DROP);
+
+    msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_chain_nlmsg_build_hdr(msg, family, NFT_MSG_NEWCHAIN, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_chain_nlmsg_build_payload(msg, chain);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send chain creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_chain_free(chain);
+
+    printf("Successfully created table '%s' and chain '%s'.\n", table_name, chain_name);
+
+    nl_socket_free(sock);
+    return 0;
+}
+</code>
+<code name>test_case_netfilter.c</code name>
+<compile cmd>
+gcc test_case_netfilter.c -I/usr/include/libnl3 -lnftnl -lmnl -lnl-3 -lnl-genl-3 -o test_case_netfilter
+</compile cmd>

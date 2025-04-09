@@ -1,0 +1,56 @@
+<think process>  
+根据你提供的调用栈，我们可以从 `do_shm_rmid` 开始分析。这个函数涉及共享内存的移除操作，因此我们需要在用户态中创建和删除共享内存资源，进而触发内核中对应的 `do_shm_rmid` 调用。我们从调用栈中看到，调用链条最初由 `shmctl` 系统调用触发，而 `shmctl` 是与共享内存管理相关的控制系统调用。
+
+接下来的思考路径是：
+1. 用户态程序首先要使用 `shmctl` 来操作共享内存。
+2. `shmctl` 会调用 `sys_shmctl`，进而到达 `do_shm_rmid`。
+3. 我们需要确认如何通过 `shmctl` 调用正确的操作来触发共享内存的删除（即 `do_shm_rmid`），这通常是通过 `IPC_RMID` 命令来删除共享内存。
+4. 我们通过 `shmget` 创建共享内存段，并通过 `shmctl` 删除它，确保调用栈能够成功触发内核函数。
+
+因此，测试用例的用户态代码将包含：
+- 使用 `shmget` 创建一个共享内存段。
+- 使用 `shmctl` 删除该共享内存段，这将通过内核调用栈执行 `do_shm_rmid` 函数。
+
+<pkg install cmd>  
+（不需要额外的安装依赖）  
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/shm.h>
+#include <sys/ipc.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+int main() {
+    // 创建共享内存
+    key_t key = ftok("/tmp", 65);  // 使用路径 "/tmp" 和字符 65 生成一个键值
+    int shmid = shmget(key, 1024, 0666 | IPC_CREAT);  // 创建一个共享内存段
+
+    if (shmid == -1) {
+        perror("shmget failed");
+        exit(1);
+    }
+    
+    printf("Shared memory segment created with ID: %d\n", shmid);
+    
+    // 删除共享内存
+    if (shmctl(shmid, IPC_RMID, NULL) == -1) {
+        perror("shmctl IPC_RMID failed");
+        exit(1);
+    }
+
+    printf("Shared memory segment marked for deletion.\n");
+
+    return 0;
+}
+</code>  
+
+<code name> test_case_shm_rmid.c </code name>  
+
+<compile cmd>  
+gcc test_case_shm_rmid.c -o test_case_shm_rmid  
+</compile cmd>  
+
+<think process>  
+在上述程序中，首先创建了一个共享内存段，并通过 `shmctl` 函数传入 `IPC_RMID` 参数来请求删除该共享内存。删除操作将触发内核的 `do_shm_rmid` 函数，按照提供的调用栈路径，最终会执行共享内存删除相关的内核操作。这段代码将帮助验证 `do_shm_rmid` 函数的执行。

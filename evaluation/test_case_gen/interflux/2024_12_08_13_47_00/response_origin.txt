@@ -1,0 +1,88 @@
+<think process>  
+在分析调用栈时，我们从 `ceph_find_or_create_string` 开始，这个函数属于 Ceph 文件系统的实现，用于查找或创建字符串。要触发此函数，我们首先要了解触发该函数的条件。
+
+调用栈中提到的相关函数如 `ceph_fill_inode`、`mds_dispatch`、`ceph_atomic_open` 和 `ceph_readdir_prepopulate` 都涉及文件系统操作，特别是目录读取、文件打开等操作。因此，目标是通过一些操作（如文件的读取、目录的预填充或原子打开）来触发 `ceph_find_or_create_string` 函数的调用。
+
+具体思路：
+1. **触发条件：** `ceph_find_or_create_string` 会在处理文件系统元数据时调用，尤其是在处理目录读取（`readdir_prepopulate`）、文件打开（`atomic_open`）时。因此，通过进行这些操作可以触发该函数。
+2. **创建目录并执行相关操作：** 我们可以创建一个目录，并在目录中执行读取操作，或打开文件。通过这些操作，`ceph_find_or_create_string` 可能会被间接调用。
+3. **模拟操作：** 通过使用 `open()` 来尝试原子打开文件或列出目录内容，这会引发一系列内核函数的调用，从而最终调用 `ceph_find_or_create_string`。
+
+接下来，我们将编写一个测试用例程序，执行这些文件操作以确保能触发 `ceph_find_or_create_string`。</think process>
+
+<pkg install cmd>  
+libcephfs-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <fcntl.h>  
+#include <dirent.h>  
+#include <unistd.h>  
+#include <string.h>  
+
+#define TEST_DIR "/tmp/test_ceph_dir"
+#define TEST_FILE "/tmp/test_ceph_dir/test_file"
+
+void create_test_dir_and_file() {
+    // 创建目录
+    if (mkdir(TEST_DIR, 0755) == -1) {
+        perror("mkdir failed");
+        exit(EXIT_FAILURE);
+    }
+
+    // 创建文件
+    int fd = open(TEST_FILE, O_CREAT | O_RDWR, 0644);
+    if (fd == -1) {
+        perror("open failed");
+        exit(EXIT_FAILURE);
+    }
+    close(fd);
+}
+
+void read_directory() {
+    DIR *dir = opendir(TEST_DIR);
+    if (dir == NULL) {
+        perror("opendir failed");
+        exit(EXIT_FAILURE);
+    }
+
+    struct dirent *entry;
+    while ((entry = readdir(dir)) != NULL) {
+        // 输出目录项
+        printf("Found file: %s\n", entry->d_name);
+    }
+
+    closedir(dir);
+}
+
+void open_file_atomic() {
+    int fd = open(TEST_FILE, O_RDONLY);
+    if (fd == -1) {
+        perror("open failed");
+        exit(EXIT_FAILURE);
+    }
+    close(fd);
+}
+
+int main() {
+    // 创建测试目录和文件
+    create_test_dir_and_file();
+    
+    // 执行读取目录操作，触发相关内核函数
+    read_directory();
+
+    // 执行文件原子打开操作
+    open_file_atomic();
+
+    printf("Test completed successfully.\n");
+    return 0;
+}
+</code>
+
+<code name> test_case_ceph_find_or_create_string.c </code name>
+
+<compile cmd>  
+gcc -o test_case_ceph_find_or_create_string test_case_ceph_find_or_create_string.c -lcephfs  
+</compile cmd>

@@ -1,0 +1,128 @@
+> 正在思考
+**开发用户空间程序**
+我正在思考如何制作一个用户空间C程序，使内核调用指定的函数nft_trans_alloc_gfp。提供了一个内核函数调用栈以指导程序的开发。
+**设计测试用例**
+我正在设计一个用户空间C程序，涉及创建、修改或删除netfilter表、链、规则等，以触发内核中的nft_trans_alloc_gfp函数调用。
+**分析触发条件**
+我正在解析触发内核函数nft_trans_alloc_gfp的条件，并计划通过创建、定义和添加netfilter表和链来触发这些条件。使用libnftnl库进行操作。
+**添加表和链**
+我正在设计一个C程序，使用libnftnl库添加Netfilter表和链。这样可以确保触发内核函数nft_trans_alloc_gfp，最后列出所需的软件包。
+思考，持续 5 秒
+
+<think process>
+为了触发内核函数 `nft_trans_alloc_gfp`，需要编写一个用户态程序，通过操作 Netfilter 表、链和规则，启动一个事务过程。利用 `libnftnl` 库，可以在用户空间创建和修改 Netfilter 配置，进而触发内核中的相关函数调用。该测试用例将执行以下步骤：
+
+1. 创建一个新的 Netfilter 表。
+2. 在该表中创建一个新的链。
+3. 向链中添加一条规则。
+
+这些操作将涉及内核事务分配，进而调用 `nft_trans_alloc_gfp` 函数。
+
+</think process>
+<pkg install cmd>
+apt install libnftnl-dev libmnl-dev gcc
+</pkg install cmd>
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <netlink/netlink.h>
+#include <netlink/msg.h>
+#include <netlink/genl/genl.h>
+#include <nftnl/table.h>
+#include <nftnl/chain.h>
+#include <nftnl/rule.h>
+
+int main() {
+    struct nl_sock *sock;
+    int family;
+    int ret;
+
+    // 初始化Netlink套接字
+    sock = nl_socket_alloc();
+    if (!sock) {
+        fprintf(stderr, "Failed to allocate netlink socket.\n");
+        return -1;
+    }
+
+    if (genl_connect(sock)) {
+        fprintf(stderr, "Failed to connect to generic netlink.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    family = genl_ctrl_resolve(sock, "nftables");
+    if (family < 0) {
+        fprintf(stderr, "Failed to resolve nftables family.\n");
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    // 创建一个新的表
+    struct nftnl_table *table;
+    char *table_name = "test_table";
+    table = nftnl_table_alloc();
+    nftnl_table_set_str(table, NFTNL_TABLE_NAME, table_name);
+    nftnl_table_set_u32(table, NFTNL_TABLE_FAMILY, NFPROTO_IPV4);
+
+    struct nl_msg *msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_table_nlmsg_build_hdr(msg, family, NFT_MSG_NEWTABLE, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_table_nlmsg_build_payload(msg, table);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send table creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_table_free(table);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_table_free(table);
+
+    // 创建一个新的链
+    struct nftnl_chain *chain;
+    char *chain_name = "test_chain";
+    chain = nftnl_chain_alloc();
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_TABLE, table_name);
+    nftnl_chain_set_str(chain, NFTNL_CHAIN_NAME, chain_name);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_HOOKNUM, NF_INET_PRE_ROUTING);
+    nftnl_chain_set_u32(chain, NFTNL_CHAIN_POLICY, NFT_DROP);
+
+    msg = nlmsg_alloc();
+    if (!msg) {
+        fprintf(stderr, "Failed to allocate netlink message.\n");
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+
+    nftnl_chain_nlmsg_build_hdr(msg, family, NFT_MSG_NEWCHAIN, NLM_F_CREATE | NLM_F_EXCL | NLM_F_ACK);
+    nftnl_chain_nlmsg_build_payload(msg, chain);
+    ret = nl_send_auto(sock, msg);
+    if (ret < 0) {
+        fprintf(stderr, "Failed to send chain creation message: %s\n", nl_geterror(ret));
+        nlmsg_free(msg);
+        nftnl_chain_free(chain);
+        nl_socket_free(sock);
+        return -1;
+    }
+    nlmsg_free(msg);
+    nftnl_chain_free(chain);
+
+    printf("Successfully created table '%s' and chain '%s'.\n", table_name, chain_name);
+
+    nl_socket_free(sock);
+    return 0;
+}
+</code>
+<code name>test_case_netfilter.c</code name>
+<compile cmd>
+gcc test_case_netfilter.c -lnftnl -lmnl -o test_case_netfilter
+</compile cmd>

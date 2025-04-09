@@ -1,0 +1,1 @@
+gcc test_case_move_mount.c -o test_case_move_mount -lmount

@@ -1,0 +1,63 @@
+<think process>  
+根据提供的调用栈信息，内核函数 `ip_mc_source` 是在设置 IP 多播源时被调用的，它的调用链涉及多种套接字选项的设置（如 `setsockopt`）。从调用栈中看，`do_ip_setsockopt` 是一个关键函数，涉及多种协议的设置，如 `mptcp_setsockopt_v4`、`raw_setsockopt`、`udp_setsockopt` 等。
+
+要使内核调用 `ip_mc_source`，需要触发设置某些套接字选项。`setsockopt` 是触发调用栈的起始点，而它的父函数之一是 `do_ip_setsockopt`。为了模拟这一过程，用户态程序需要通过调用 `setsockopt` 设置特定的多播选项（例如 IP 多播源地址）。
+
+接下来，分析调用栈中的函数会发现有多个协议类型的设置函数，因此为了确保可以正确触发 `ip_mc_source`，可以选择设置 IP 相关的多播源选项。假设我们选择设置 IP 地址和端口，并通过指定 `IP_ADD_MEMBERSHIP` 或 `IP_DROP_MEMBERSHIP` 等选项来测试。
+
+由于 `setsockopt` 是触发内核调用栈的关键，我们需要在用户态程序中通过 `setsockopt` 来触发多播源的设置，进而通过调用链达到 `ip_mc_source`。
+
+因此，程序可以通过向套接字应用多播源选项来实现这一点。我们将使用 `setsockopt` 配置多播源，并选择一个常见的多播地址进行测试。
+
+最终，我们的用户态程序将包括：
+1. 创建一个原始套接字。
+2. 配置多播组的源地址。
+3. 通过 `setsockopt` 调用来触发内核中的 `ip_mc_source`。
+
+</think process>
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+
+int main() {
+    int sockfd;
+    struct ip_mreq_source mreq;
+    struct sockaddr_in addr;
+
+    // 创建原始套接字
+    sockfd = socket(AF_INET, SOCK_RAW, IPPROTO_UDP);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    // 设置多播源的 IP 地址和源地址
+    mreq.imr_multiaddr.s_addr = inet_addr("239.255.255.250");  // 多播地址
+    mreq.imr_sourceaddr.s_addr = inet_addr("192.168.1.100");   // 源地址
+    mreq.imr_interface.s_addr = htonl(INADDR_ANY);             // 本地接口地址
+
+    // 设置套接字选项
+    if (setsockopt(sockfd, IPPROTO_IP, IP_ADD_SOURCE_MEMBERSHIP, &mreq, sizeof(mreq)) < 0) {
+        perror("setsockopt failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Successfully set multicast source membership.\n");
+
+    // 关闭套接字
+    close(sockfd);
+    return 0;
+}
+</code>
+
+<code name> test_case_ip_mc_source.c </code name>
+
+<compile cmd> gcc -o test_case_ip_mc_source test_case_ip_mc_source.c </compile cmd>

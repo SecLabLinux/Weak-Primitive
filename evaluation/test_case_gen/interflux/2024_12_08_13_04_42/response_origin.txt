@@ -1,0 +1,50 @@
+<think process>  
+在分析调用栈时，我们可以看到 `ip_set_create` 函数位于 `ip_set_core.c` 文件中。从名字上可以推测，`ip_set_create` 与 IP set 相关，可能用于创建或初始化一个 IP set。为了使该内核函数被调用，用户态程序需要触发涉及 IP set 操作的功能。常见的方式是通过 ipset 工具或者直接与内核的 netfilter 子系统交互。
+
+在调用栈的上下文中，`ip_set_create` 是用于创建一个新的 IP set。因此，用户态程序需要使用与 IP set 创建相关的系统调用，通常是通过 Netfilter（例如使用 `libipset`）或者直接通过 netlink 接口来操作。对于这个测试用例，我们可以编写一个简单的程序，通过 `libipset` 库创建一个新的 IP set，从而触发内核中的 `ip_set_create` 函数。
+
+因此，用户态程序需要做以下几步：
+1. 初始化 libipset。
+2. 使用 `ipset` API 创建一个 IP set。
+3. 调用相应的内核接口来触发 `ip_set_create`。
+
+通过这种方式，`ip_set_create` 函数会被调用。我们会选择一个简单的 IP set 类型，如 `hash:ip` 来进行创建，并将其加入到测试用例中。
+
+</think process>  
+<pkg install cmd>  
+libipset-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ipset/ipset.h>
+
+int main() {
+    struct ipset *set;
+    struct ipset_create_param create_param;
+    int ret;
+
+    // 初始化 IP set 创建参数
+    memset(&create_param, 0, sizeof(create_param));
+    create_param.type = IPSET_HASH_IP;
+    create_param.size = 1024;
+    strcpy(create_param.name, "test_ipset");
+
+    // 创建 IP set
+    ret = ipset_create(&set, &create_param);
+    if (ret != 0) {
+        fprintf(stderr, "Failed to create IP set\n");
+        return 1;
+    }
+
+    printf("IP set created successfully\n");
+
+    // 释放资源
+    ipset_destroy(set);
+
+    return 0;
+}
+</code>  
+<code name> test_case_ipset_create.c </code name>  
+<compile cmd> gcc test_case_ipset_create.c -o test_case_ipset_create -lipset </compile cmd>  

@@ -1,0 +1,1 @@
+gcc -o test_case_rpc_new_client test_case_rpc_new_client.c

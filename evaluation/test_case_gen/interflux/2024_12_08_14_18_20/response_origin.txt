@@ -1,0 +1,67 @@
+<think process>  
+根据给定的内核函数调用栈，我们需要构造一个用户态程序，使其触发内核调用路径：`nl80211_parse_rnr_elems` -> `nl80211_parse_beacon` -> `nl80211_channel_switch` -> `nl80211_color_change` -> `nl80211_set_beacon` -> `nl80211_start_ap`。这意味着我们需要通过用户态的程序触发一些 Wi-Fi 相关的操作，特别是与无线接入点（AP）配置相关的操作。
+
+首先，`nl80211` 是一个用于与 Linux 内核通信的无线配置接口，用户态通过 `nl80211` 接口与内核通信。为了触发上述函数链条，用户态程序需要调用与无线网络配置相关的函数，尤其是关于 Beacon 配置、AP 启动和信道切换的操作。
+
+- `nl80211_parse_rnr_elems` 是在解析无线网络元素时调用的，通常涉及到处理广播数据帧中的 RNR 元素（用于无线网络中的重新选择），这些元素可能会出现在 Beacon 帧中。
+- `nl80211_parse_beacon` 主要是解析 Beacon 帧，它会进一步解析与信道、SSID、频段等相关的配置。
+- `nl80211_channel_switch` 涉及信道切换，而 `nl80211_color_change` 是与 802.11ax (Wi-Fi 6) 中的颜色变化相关的操作，通常用于信道管理。
+- `nl80211_set_beacon` 和 `nl80211_start_ap` 负责设置 Beacon 帧并启动接入点（AP）。
+
+为了触发这些函数调用，我们需要使用 `iw` 或 `nl80211` 的接口来设置一个无线接入点，并确保 Beacon 帧被触发。具体的用户态操作会包括设置 SSID、信道、启用 AP 模式等。
+
+用户程序的核心是通过 `iw` 命令接口或 `nl80211` 的 API 来配置无线设备并启动一个简单的接入点。
+
+</think process>
+
+<pkg install cmd>  
+libnl-3-dev  
+libnl-genl-3-dev  
+</pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // 设定网卡接口名，通常是 wlan0 或其他
+    const char *interface = "wlan0";
+    
+    // 配置 SSID 和信道
+    const char *ssid = "TestAP";
+    int channel = 6;
+    
+    // 使用 iw 工具设置无线网卡
+    char command[256];
+
+    // 1. 设置无线网卡工作模式为 AP
+    snprintf(command, sizeof(command), "iw dev %s set type ap", interface);
+    system(command);
+
+    // 2. 设置信道
+    snprintf(command, sizeof(command), "iw dev %s set channel %d", interface, channel);
+    system(command);
+
+    // 3. 启动一个简单的接入点
+    snprintf(command, sizeof(command), "hostapd -B -P /var/run/hostapd.pid /etc/hostapd/hostapd.conf");
+    system(command);
+
+    // 打印成功信息
+    printf("AP is started on interface %s with SSID: %s on channel %d\n", interface, ssid, channel);
+
+    // 持续运行，保持 AP 存在
+    while(1) {
+        sleep(10);
+    }
+
+    return 0;
+}
+</code>
+
+<code name> test_case_nl80211_ap.c </code name>
+
+<compile cmd>  
+gcc test_case_nl80211_ap.c -o test_case_nl80211_ap -lnl-3 -lnl-genl-3  
+</compile cmd>

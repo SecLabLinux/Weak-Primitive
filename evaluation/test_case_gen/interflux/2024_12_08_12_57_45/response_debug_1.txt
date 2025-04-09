@@ -1,0 +1,53 @@
+<think process>  
+根据提供的错误信息，`gcc: error: unrecognized command-line option ‘-y’` 表明在编译时传递了一个无法识别的命令行选项 `-y`。这个错误并非来自代码本身，而是来自编译命令。错误提示还显示 `gcc: fatal error: no input files`，表示没有指定输入文件，这通常是因为命令的参数不正确导致的。
+
+错误排查步骤：
+1. 检查是否有额外的无效选项传递给了 `gcc`。此问题通常由编译命令书写错误或命令行参数问题引起。
+2. 需要确保输入文件 `test_case_alloc_pid.c` 已经指定且正确传递给编译器。
+
+可能的原因是编译命令书写不当，或者误加了 `-y` 选项。在此情况下，重新检查并确保命令正确即可。
+
+修改方法：
+1. 删除无效的 `-y` 选项。
+2. 保证编译命令格式正确。
+
+修复后的命令应如下所示。  
+</think process>
+
+<pkg install cmd>  
+无依赖安装需要。  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>  // 添加 wait 的头文件
+
+int main() {
+    pid_t pid;
+
+    // 创建子进程
+    pid = fork();
+
+    if (pid == -1) {
+        // fork 失败
+        perror("fork failed");
+        exit(1);
+    } else if (pid == 0) {
+        // 子进程
+        printf("This is the child process.\n");
+        exit(0);  // 子进程结束
+    } else {
+        // 父进程
+        printf("This is the parent process, child PID: %d\n", pid);
+        wait(NULL);  // 等待子进程结束
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_alloc_pid.c -o test_case_alloc_pid  
+</compile cmd>

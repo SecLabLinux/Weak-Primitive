@@ -1,0 +1,49 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+#include <unistd.h>  // 为了 close 函数
+#include <linux/xfrm.h>  // 确保包含 xfrm 相关的头文件
+#include <linux/if_ether.h>
+
+#define XFRM_POLICY_TYPE XFRM_POLICY_OUT
+
+int main() {
+    int sock;
+    struct sockaddr_in addr;
+    struct xfrm_user_policy pol;
+    struct xfrm_user_tmpl tmpl;
+    
+    sock = socket(AF_INET, SOCK_RAW, IPPROTO_IPIP);  // 使用原始套接字
+    if (sock < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    memset(&pol, 0, sizeof(pol));
+    memset(&tmpl, 0, sizeof(tmpl));
+
+    // 填充政策结构
+    pol.saddr = inet_addr("192.168.1.1");  // 源地址
+    pol.daddr = inet_addr("192.168.1.2");  // 目标地址
+    pol.family = AF_INET;
+    pol.policy = XFRM_POLICY_OUT;
+    pol.tmpl = &tmpl;
+    
+    // 设置模板
+    tmpl.family = AF_INET;
+
+    // 调用系统调用添加策略
+    if (setsockopt(sock, SOL_XFRM, XFRM_MSG_NEWPOLICY, &pol, sizeof(pol)) < 0) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    printf("XFRM policy added successfully.\n");
+
+    close(sock);
+    return 0;
+}

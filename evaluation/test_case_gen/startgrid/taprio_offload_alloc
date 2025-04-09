@@ -1,0 +1,13 @@
+ taprio_offload_alloc
+| taprio_disable_offload
+|| taprio_change
+/// sch_taprio.c
+\\\ change
+||| taprio_init
+//// sch_taprio.c
+\\\\ init
+|| taprio_destroy
+/// sch_taprio.c
+\\\ destroy
+| taprio_enable_offload
+|| taprio_change

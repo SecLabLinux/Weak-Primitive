@@ -1,0 +1,48 @@
+#include <stdio.h>  
+#include <string.h>  
+#include <stdlib.h>  
+#include <sys/socket.h>  
+#include <netinet/in.h>  
+#include <netinet/sctp.h>  
+#include <arpa/inet.h>  
+
+int main() {  
+    int sock_fd;  
+    struct sockaddr_in servaddr;  
+    struct sctp_initmsg initmsg;  
+
+    // 创建 SCTP 套接字  
+    sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);  
+    if (sock_fd < 0) {  
+        perror("socket failed");  
+        return -1;  
+    }  
+
+    // 设置初始化消息
+    memset(&initmsg, 0, sizeof(initmsg));  
+    initmsg.sinit_num_ostreams = 5;  
+    initmsg.sinit_max_instreams = 5;  
+    initmsg.sinit_max_attempts = 4;  
+
+    // 设置 SCTP 初始化选项  
+    if (setsockopt(sock_fd, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {  
+        perror("setsockopt failed");  
+        return -1;  
+    }  
+
+    // 设置服务器地址  
+    memset(&servaddr, 0, sizeof(servaddr));  
+    servaddr.sin_family = AF_INET;  
+    servaddr.sin_port = htons(9000);  
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");  
+
+    // 连接到服务器
+    if (connect(sock_fd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {  
+        perror("connect failed");  
+        return -1;  
+    }  
+
+    printf("SCTP connection established\n");  
+    close(sock_fd);  
+    return 0;  
+}

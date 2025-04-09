@@ -1,0 +1,68 @@
+<think process>  
+根据提供的调用栈，目标是触发内核中的 `__fsnotify_alloc_group` 函数。通过分析调用栈，发现该函数在 `fsnotify_alloc_group` 中被调用，而 `fsnotify_alloc_group` 又是由 `__do_sys_fanotify_init` 等函数调用的。这表明内核中与 `fanotify` 相关的系统调用链将会涉及到 `__fsnotify_alloc_group`。
+
+1. **`__fsnotify_alloc_group`** 是一个内部函数，通常是在处理与文件系统通知（如 `fanotify`）相关的操作时被调用的。
+2. 在用户态中，我们需要使用与文件系统通知相关的 API 来触发这个内核函数。从调用栈来看，`fanotify` 的初始化涉及到 `__do_sys_fanotify_init` 和 `__se_sys_fanotify_init` 等函数。
+3. 这些函数与 `fanotify` 的初始化及其事件通知相关，因此，我们可以在用户态编写一个调用 `fanotify_init` 系统调用的程序。这样可以通过内核的 `fanotify` 初始化过程来触发相关的内核函数，包括 `__fsnotify_alloc_group`。
+
+因此，测试用例的目标是：编写一个用户程序，调用 `fanotify_init` 来触发内核中的相关函数链，从而使 `__fsnotify_alloc_group` 被执行。
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <linux/fanotify.h>
+#include <stdlib.h>
+
+#define FAN_MASK (FAN_OPEN | FAN_CLOSE)
+
+int main() {
+    int fanotify_fd;
+    struct fanotify_event_metadata buf[1024];
+
+    // Step 1: Create a fanotify instance
+    fanotify_fd = fanotify_init(FAN_NONBLOCK | FAN_CLOEXEC, FAN_MASK);
+    if (fanotify_fd == -1) {
+        perror("fanotify_init failed");
+        return 1;
+    }
+
+    // Step 2: Add a watch to monitor a directory (for example, "/tmp")
+    if (fanotify_mark(fanotify_fd, FAN_MARK_ADD, FAN_MASK, AT_FDCWD, "/tmp") == -1) {
+        perror("fanotify_mark failed");
+        close(fanotify_fd);
+        return 1;
+    }
+
+    // Step 3: Simulate event by opening a file inside the monitored directory
+    int file_fd = open("/tmp/test_file.txt", O_CREAT | O_RDWR, 0644);
+    if (file_fd == -1) {
+        perror("open file failed");
+        close(fanotify_fd);
+        return 1;
+    }
+
+    // Step 4: Read events from fanotify descriptor
+    ssize_t len = read(fanotify_fd, buf, sizeof(buf));
+    if (len == -1) {
+        perror("read failed");
+        close(file_fd);
+        close(fanotify_fd);
+        return 1;
+    }
+
+    printf("Received %ld bytes of events\n", len);
+
+    // Close the file and fanotify descriptor
+    close(file_fd);
+    close(fanotify_fd);
+
+    return 0;
+}
+</code>  
+<code name> test_case_fanotify_init.c </code name>  
+<compile cmd> gcc test_case_fanotify_init.c -o test_case_fanotify_init -lstdc++ </compile cmd>

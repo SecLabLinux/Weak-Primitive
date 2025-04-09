@@ -1,0 +1,74 @@
+<think process>
+根据编译错误信息分析：
+
+1. **错误：`storage size of ‘pol’ isn’t known`**
+   - 这个错误表明编译器无法识别 `xfrm_user_policy` 结构体的定义。`xfrm_user_policy` 是用于 xfrm（IPSec）相关操作的内核数据结构。如果编译器无法找到这个结构体的定义，通常是因为缺少相关的头文件。
+
+2. **错误：`‘SOL_XFRM’ undeclared`**
+   - `SOL_XFRM` 是用在 `setsockopt()` 系统调用中的一个选项，它用于与 xfrm（IPSec）相关的设置。这也表明缺少必要的头文件。`SOL_XFRM` 在 `linux/xfrm.h` 中定义，因此确保包含该头文件。
+
+3. **分析与解决**：
+   - 需要确保包含正确的头文件 `#include <linux/xfrm.h>`，它定义了 `xfrm_user_policy` 结构体、`SOL_XFRM` 等相关常量。
+   - 如果系统没有直接提供这些头文件，需要确保内核头文件路径正确或者安装相关开发包。
+
+**解决方案**：
+- 确保包含 `linux/xfrm.h` 和其他相关头文件。
+- 在内核中，`xfrm_user_policy` 是用户态与内核交互的结构体之一，因此应仔细检查系统上是否有正确的内核开发头文件。
+
+</think process>
+
+<pkg install cmd> </pkg install cmd>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <arpa/inet.h>
+#include <unistd.h>  // 为了 close 函数
+#include <linux/xfrm.h>  // 确保包含 xfrm 相关的头文件
+#include <linux/if_ether.h>
+
+#define XFRM_POLICY_TYPE XFRM_POLICY_OUT
+
+int main() {
+    int sock;
+    struct sockaddr_in addr;
+    struct xfrm_user_policy pol;
+    struct xfrm_user_tmpl tmpl;
+    
+    sock = socket(AF_INET, SOCK_RAW, IPPROTO_IPIP);  // 使用原始套接字
+    if (sock < 0) {
+        perror("socket");
+        exit(1);
+    }
+
+    memset(&pol, 0, sizeof(pol));
+    memset(&tmpl, 0, sizeof(tmpl));
+
+    // 填充政策结构
+    pol.saddr = inet_addr("192.168.1.1");  // 源地址
+    pol.daddr = inet_addr("192.168.1.2");  // 目标地址
+    pol.family = AF_INET;
+    pol.policy = XFRM_POLICY_OUT;
+    pol.tmpl = &tmpl;
+    
+    // 设置模板
+    tmpl.family = AF_INET;
+
+    // 调用系统调用添加策略
+    if (setsockopt(sock, SOL_XFRM, XFRM_MSG_NEWPOLICY, &pol, sizeof(pol)) < 0) {
+        perror("setsockopt");
+        exit(1);
+    }
+
+    printf("XFRM policy added successfully.\n");
+
+    close(sock);
+    return 0;
+}
+</code>
+
+<compile cmd> gcc test_case_xfrm_policy.c -o test_case_xfrm_policy -lssl -lcrypto </compile cmd>

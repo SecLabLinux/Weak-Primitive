@@ -1,0 +1,86 @@
+<think process>  
+从报错信息来看，系统找不到 `libssl-dev` 和 `libsctp-dev` 这两个包。这表明依赖包没有正确安装，可能是因为：
+1. `libssl-dev` 和 `libsctp-dev` 没有正确安装，或者安装路径不在编译器的搜索路径中。
+2. 可能是缺少软件源配置，或者包名有误。
+
+根据提示，我们需要先确保这些依赖包安装在系统中。为了修复此问题，我们可以尝试使用 `apt` 安装这两个依赖，具体命令如下：
+- `libssl-dev` 是 OpenSSL 的开发文件，通常用于编译需要加密功能的程序。
+- `libsctp-dev` 提供了与 SCTP 协议相关的开发库。
+
+另外，我检查了一下代码中的其他问题：
+1. `sctp_sendmsg()` 函数的参数传递上可能存在错误，特别是 `sinfo_flags` 的使用上。`SCTP_EOF` 是用于发送结束标志，但是否正确传递了标志位需要确认。如果发送的消息类型并不符合预期的使用场景，可能会导致不必要的错误。
+
+这些问题需要逐步修复后再次编译。
+
+</think process>  
+<pkg install cmd>  
+apt install libsctp-dev  
+apt install libssl-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#define SERVER_ADDR "127.0.0.1"
+#define SERVER_PORT 9899
+
+int main() {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    struct sctp_sndrcvinfo sndrcv_info;
+    struct sctp_initmsg initmsg;
+    char buffer[1024] = "Hello, SCTP!";
+
+    // 创建 SCTP 套接字
+    sockfd = socket(AF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
+    if (sockfd < 0) {
+        perror("socket creation failed");
+        return 1;
+    }
+
+    // 配置目标服务器地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(SERVER_PORT);
+    inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr);
+
+    // 设置 SCTP 初始化选项
+    memset(&initmsg, 0, sizeof(initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    if (setsockopt(sockfd, SOL_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {
+        perror("setsockopt SCTP_INITMSG failed");
+        close(sockfd);
+        return 1;
+    }
+
+    // 配置消息发送信息
+    memset(&sndrcv_info, 0, sizeof(sndrcv_info));
+    sndrcv_info.sinfo_stream = 0;
+    sndrcv_info.sinfo_flags = SCTP_EOF;  // 发送结束标志
+
+    // 发送 SCTP 数据包
+    if (sctp_sendmsg(sockfd, buffer, strlen(buffer), (struct sockaddr *)&server_addr, sizeof(server_addr), 0, 0, sndrcv_info.sinfo_stream, 0, 0) < 0) {
+        perror("sctp_sendmsg failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Message sent successfully.\n");
+
+    // 关闭套接字
+    close(sockfd);
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc -o test_case_sctp_chunkify test_case_sctp_chunkify.c -lsctp -lssl -lcrypto  
+</compile cmd>  

@@ -1,0 +1,17 @@
+ make_entry
+| lec_arp_resolve
+|| lec_start_xmit
+/// lec.c
+\\\ ndo_start_xmit
+| lec_arp_update
+|| lec_atm_send
+/// lec.c
+\\\ send
+| lec_mcast_make
+|| lec_mcast_attach
+||| lane_ioctl
+//// lec.c
+\\\\ ioctl
+| lec_vcc_added
+|| lec_vcc_attach
+||| lane_ioctl

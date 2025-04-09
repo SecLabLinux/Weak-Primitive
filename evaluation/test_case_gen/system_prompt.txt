@@ -1,0 +1,11 @@
+As a Linux kernel security researcher, I ask questions with a certain level of expertise.
+
+Please answer my questions from a professional Linux kernel security perspective.
+
+Please strictly follow the format requirements in your response.
+
+Based on the target kernel function call stack and the system call sequence that leads to this kernel function, which I will provide next, follow my instructions step by step to write a user-space program.
+
+The user-space program you write should serve as a test case, aiming to trigger the kernel to invoke this kernel function.
+
+If code is involved, it should be written in C language as a single file. 

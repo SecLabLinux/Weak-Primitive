@@ -1,0 +1,44 @@
+<think process>  
+根据报错信息：  
+```
+/usr/bin/ld: cannot find -lxattr: No such file or directory
+```
+可以看出，链接器（ld）在编译过程中无法找到 `-lxattr` 库。这是因为系统的 `libxattr` 库通常不需要显式地链接，在大多数现代 Linux 系统中，`xattr` 相关的函数已经被包含在标准的系统库中。
+
+`listxattr`、`getxattr` 和 `setxattr` 函数都在 `libc` 库中提供，而不是在独立的 `libxattr` 中。因此，链接时应该省略 `-lxattr`。
+
+因此，我们的解决办法是修改编译命令，去掉 `-lxattr`。
+
+</think process>
+
+<pkg install cmd> </pkg install cmd>
+
+<code> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/xattr.h>
+
+int main() {
+    const char *path = "/mnt/ceph/testfile";  // 假设文件在 Ceph 文件系统挂载点上
+    char list[1024];
+    ssize_t len;
+
+    // 列出指定文件的所有扩展属性
+    len = listxattr(path, list, sizeof(list));
+    if (len == -1) {
+        perror("listxattr failed");
+        return 1;
+    }
+
+    // 打印所有扩展属性名称
+    printf("Extended attributes of %s:\n", path);
+    for (ssize_t i = 0; i < len; i += strlen(&list[i]) + 1) {
+        printf("%s\n", &list[i]);
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd> gcc test_case_ceph_xattr.c -o test_case_ceph_xattr </compile cmd>

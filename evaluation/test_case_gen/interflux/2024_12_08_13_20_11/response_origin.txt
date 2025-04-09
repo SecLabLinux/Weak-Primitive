@@ -1,0 +1,104 @@
+<think process>  
+在分析这个内核函数调用栈时，我们可以看到 `xfrm_state_alloc` 函数位于 `xfrm_state.c` 文件中，而它的调用栈涉及到一些 XFRM (IPSec) 相关的模块。根据这个调用栈，`xfrm_state_alloc` 可能是分配一个新的 XFRM 状态，在执行加解密、状态迁移或资源分配时被调用。我们可以通过触发 XFRM 相关的操作来间接调用这个函数。
+
+步骤一：首先，我们需要确认如何触发与 XFRM 相关的操作。通过栈的分析，我们可以看到 `xfrm_state_add`、`xfrm_state_migrate` 和 `xfrm_add_sa` 等函数，它们与 SA（安全关联）相关，可能会涉及到 `xfrm_state_alloc` 的调用。
+
+步骤二：根据栈中的函数信息，`xfrm_state_add` 是添加新状态的关键函数，因此一个触发 SA 创建的操作可能会涉及到 `xfrm_state_alloc` 的调用。通过 `pfkey_add` 函数，它进一步调用 `xfrm_add_sa`，并最终触发 `xfrm_state_alloc`。 
+
+步骤三：为此，用户态程序可以通过发送一个 PF_KEY 消息来创建一个新的安全关联（SA），从而触发内核中的 `xfrm_state_add` 和 `xfrm_state_alloc`。PF_KEY 是一个用于 IPSec 配置的协议，可以通过用户态工具与内核通信。
+
+根据这些分析，测试程序将通过 PF_KEY 消息接口添加一个新的 SA，从而间接调用 `xfrm_state_alloc`。
+
+</think process>
+
+<pkg install cmd>  
+libpcap-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <linux/ipsec.h>
+#include <linux/netlink.h>
+#include <linux/pfkeyv2.h>
+
+#define PFKEY_VERSION 2
+#define PFKEY_MSG_TIMEOUT 5
+
+int main() {
+    int sockfd;
+    struct sockaddr_nl sa;
+    struct pfkey_msg msg;
+    struct sadb_msg *sadb;
+    struct sadb_sa *sadb_sa;
+    struct sadb_address *src, *dst;
+    struct sockaddr_in src_addr, dst_addr;
+
+    // 创建 PF_KEY 套接字
+    sockfd = socket(AF_NETLINK, SOCK_RAW, PF_KEY);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    memset(&sa, 0, sizeof(sa));
+    sa.nl_family = AF_NETLINK;
+    sa.nl_pid = getpid();
+    if (bind(sockfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        perror("bind");
+        close(sockfd);
+        return -1;
+    }
+
+    // 初始化 PF_KEY 消息
+    memset(&msg, 0, sizeof(msg));
+    msg.version = PFKEY_VERSION;
+    msg.type = SADB_ADD;
+    msg.len = PFKEY_MSG_TIMEOUT;
+    sadb = (struct sadb_msg *)&msg;
+    sadb->sadb_msg_version = PFKEY_VERSION;
+    sadb->sadb_msg_type = SADB_ADD;
+    sadb->sadb_msg_len = sizeof(struct sadb_msg) / 8;
+
+    // 配置 SA 信息
+    sadb_sa = (struct sadb_sa *)((char *)sadb + sizeof(struct sadb_msg));
+    sadb_sa->sadb_sa_len = sizeof(struct sadb_sa) / 8;
+    sadb_sa->sadb_sa_id = 1; // SA ID
+    sadb_sa->sadb_sa_spi = 0xdeadbeef; // SPI
+
+    // 配置源和目标地址
+    src = (struct sadb_address *)((char *)sadb_sa + sizeof(struct sadb_sa));
+    dst = (struct sadb_address *)((char *)src + sizeof(struct sadb_address));
+
+    memset(&src_addr, 0, sizeof(src_addr));
+    src_addr.sin_family = AF_INET;
+    src_addr.sin_addr.s_addr = inet_addr("192.168.1.1");
+
+    memset(&dst_addr, 0, sizeof(dst_addr));
+    dst_addr.sin_family = AF_INET;
+    dst_addr.sin_addr.s_addr = inet_addr("192.168.1.2");
+
+    memcpy(&src->sadb_address, &src_addr, sizeof(src_addr));
+    memcpy(&dst->sadb_address, &dst_addr, sizeof(dst_addr));
+
+    // 发送消息
+    if (send(sockfd, &msg, sizeof(msg), 0) < 0) {
+        perror("send");
+        close(sockfd);
+        return -1;
+    }
+
+    printf("PF_KEY message sent successfully\n");
+    close(sockfd);
+    return 0;
+}
+</code>
+
+<code name> test_case_xfrm_state_alloc.c </code name>
+
+<compile cmd>  
+gcc test_case_xfrm_state_alloc.c -o test_case_xfrm_state_alloc -lnl-3 -lpcap  
+</compile cmd>

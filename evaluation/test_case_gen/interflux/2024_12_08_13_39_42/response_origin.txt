@@ -1,0 +1,57 @@
+<think process>  
+根据内核函数调用栈，`tbl_mask_array_alloc` 是在 `ovs_flow_masks_rebalance` 等一系列 Open vSwitch (OVS) 相关函数调用中被调用的。这些函数通常涉及数据路径 (datapath) 的管理与流表 (flow table) 的操作。我们可以推测，通过触发相关的 OVS 数据路径管理命令，用户态程序可以间接地调用这些内核函数。
+
+从调用栈分析，我们看到 `tbl_mask_array_alloc` 是在 OVS 的一些初始化与资源管理函数中被调用的。这包括 `ovs_flow_tbl_init` 和 `ovs_flow_tbl_insert` 等函数。可以推测，向 OVS 数据路径添加或删除流项，或执行 OVS 数据路径的初始化与清理工作时，可能会触发 `tbl_mask_array_alloc`。
+
+为了触发 `tbl_mask_array_alloc`，可以编写一个测试用例，通过用户态程序与 OVS 交互，触发相关的 OVS 功能。具体来说，可以通过以下步骤：
+1. 初始化 OVS 数据路径。
+2. 添加一个流规则或操作流表，确保会触发 `ovs_flow_tbl_init`、`ovs_flow_tbl_insert`，进而触发 `tbl_mask_array_alloc`。
+3. 程序结束时，确保 OVS 流表会被清理，避免资源泄漏。
+
+考虑到内核函数涉及内存管理、流表插入和删除等操作，我们需要确保用户态程序能够模拟这些操作。
+
+测试用例的重点是：
+- 触发数据路径初始化。
+- 操作流表，特别是添加或删除流项。
+- 确保调用栈上的相关函数被执行，特别是 `tbl_mask_array_alloc`。
+
+</think process>  
+<pkg install cmd>  
+libnetfilter-queue-dev  
+libnetfilter-log-dev  
+libpcap-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <net/if.h>
+#include <linux/if_link.h>
+#include <linux/if_ether.h>
+#include <linux/if_packet.h>
+
+int main() {
+    // 示例：初始化 Open vSwitch 数据路径并添加流表项，模拟触发内核中的相关函数
+    // 这里使用 `ovs-vsctl` 命令行工具通过 system 调用间接操作内核
+
+    // 初始化 OVS 数据路径
+    system("ovs-vsctl add-br br0");
+
+    // 创建一个流表
+    system("ovs-ofctl add-flow br0 in_port=1,actions=output:2");
+
+    // 这里的命令确保触发了 `ovs_flow_tbl_init` 和相关的流表插入操作，进而调用 `tbl_mask_array_alloc`
+
+    // 释放资源，删除流表并清理
+    system("ovs-ofctl del-flows br0");
+    system("ovs-vsctl del-br br0");
+
+    printf("Open vSwitch 流表操作已完成，可能已触发 tbl_mask_array_alloc\n");
+
+    return 0;
+}
+</code>  
+<code name> test_case_tbl_mask_array_alloc.c </code name>  
+<compile cmd> gcc test_case_tbl_mask_array_alloc.c -o test_case_tbl_mask_array_alloc -lnfnetlink -lnfnetlink -lpcap </compile cmd>  

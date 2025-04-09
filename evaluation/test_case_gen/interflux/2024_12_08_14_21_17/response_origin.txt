@@ -1,0 +1,57 @@
+<think process>  
+根据调用栈，`clone_time_ns` 是在内核中执行进程克隆操作时被调用的函数，它通常会出现在 `clone`、`fork` 或 `vfork` 等系统调用的过程中。从调用栈的深度来看，`clone_time_ns` 与进程创建、命名空间和 I/O 线程等的初始化有关。
+
+从栈中的信息来看，`clone_time_ns` 位于多个与进程创建及相关线程管理的函数中，尤其是涉及到命名空间、I/O 线程的创建和工作队列的处理。关键路径包含了进程克隆时的一些内核处理逻辑，如 I/O 线程创建和 `fork` 操作。
+
+用户态程序需要触发 `clone` 系统调用，并使得内核执行到 `clone_time_ns`，因此可以选择使用 `clone` 系统调用来创建进程，并且保证在某些情况下会执行到 `clone_time_ns` 这一函数。`clone` 系统调用本身可以通过用户态调用接口触发，我们可以使用 `clone` 或 `clone3` 来创建进程，从而触发这些内核函数的调用。
+
+为了模拟这个过程，用户程序中需要使用 `clone` 系统调用，并确保它与内核路径中的函数相匹配。`clone` 的调用可以通过 `syscall` 接口来进行，或者通过更高层的 API，如 `fork` 或 `clone3`。  
+</think process>
+
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>
+
+<code>  
+#define _GNU_SOURCE
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+
+int child_func(void *arg) {
+    printf("Child process created\n");
+    return 0;
+}
+
+int main() {
+    const int stack_size = 1024 * 1024;
+    char *stack = malloc(stack_size);
+    if (stack == NULL) {
+        perror("malloc");
+        return 1;
+    }
+
+    // 使用 clone 系统调用创建一个新进程
+    int clone_flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
+    pid_t pid = clone(child_func, stack + stack_size, clone_flags, NULL);
+    
+    if (pid == -1) {
+        perror("clone");
+        free(stack);
+        return 1;
+    }
+
+    // 等待子进程结束
+    waitpid(pid, NULL, 0);
+    free(stack);
+    return 0;
+}
+</code>
+
+<code name> test_case_clone.c </code name>
+
+<compile cmd>  
+gcc -o test_case_clone test_case_clone.c -lrt -pthread  
+</compile cmd>

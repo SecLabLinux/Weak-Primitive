@@ -1,0 +1,47 @@
+<think process>  
+在这次任务中，我们的目标是编写一个用户态程序，通过特定的方式触发内核函数 `__build_xattrs` 的调用路径。根据提供的调用栈，可以分析出整个调用过程：
+
+1. `__build_xattrs` 是最终被调用的函数，我们需要从用户态通过一些与文件系统和 xattr（扩展属性）相关的操作，间接地调用这个函数。
+2. `__build_xattrs` 是由 `__ceph_getxattr` 和 `__ceph_setxattr` 函数调用的，前者对应读取操作，后者对应写入操作。
+3. `ceph_get_acl`、`ceph_set_acl`、`ceph_get_xattr_handler`、`ceph_set_xattr_handler` 等与 Ceph 文件系统的 xattr 操作相关，因此这个程序应该与 Ceph 文件系统的扩展属性进行交互。
+4. `ceph_listxattr` 用于列出文件的所有扩展属性，而 `ceph_getxattr` 和 `ceph_setxattr` 则分别用于读取和设置单个扩展属性。
+
+通过 `listxattr` 来列出文件的扩展属性，或者使用 `setxattr` 来设置扩展属性，都可能会触发这些调用栈中的函数。我们将选择 `listxattr` 来列出扩展属性，这应该会导致 `__build_xattrs` 的调用。
+
+因此，我们将编写一个简单的程序，它会在 Ceph 文件系统挂载的目录上执行 `listxattr` 操作，从而触发内核函数调用。
+
+</think process>
+
+<pkg install cmd> </pkg install cmd>
+
+<code> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/xattr.h>
+
+int main() {
+    const char *path = "/mnt/ceph/testfile";  // 假设文件在 Ceph 文件系统挂载点上
+    char list[1024];
+    ssize_t len;
+
+    // 列出指定文件的所有扩展属性
+    len = listxattr(path, list, sizeof(list));
+    if (len == -1) {
+        perror("listxattr failed");
+        return 1;
+    }
+
+    // 打印所有扩展属性名称
+    printf("Extended attributes of %s:\n", path);
+    for (ssize_t i = 0; i < len; i += strlen(&list[i]) + 1) {
+        printf("%s\n", &list[i]);
+    }
+
+    return 0;
+}
+</code>
+
+<code name> test_case_ceph_xattr.c </code name>
+
+<compile cmd> gcc test_case_ceph_xattr.c -o test_case_ceph_xattr -lxattr </compile cmd>

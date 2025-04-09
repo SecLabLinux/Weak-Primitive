@@ -1,0 +1,4 @@
+config BACK_TRACE_ALLOC_PRINT 
+    bool
+    depends on BACK_TRACE_ALLOC
+    default m

@@ -1,0 +1,65 @@
+<think process>  
+根据错误信息 `/bin/sh: 1: libbluetooth-dev: not found`，说明系统未能找到 `libbluetooth-dev` 这个包。通常情况下，这个包用于开发与 Bluetooth 协议相关的程序，提供了包含 Bluetooth 协议栈支持的头文件。
+
+可能的原因是包管理器中未安装该包，或者该包的名称与系统中的实际名称不匹配。为了解决这个问题，首先确认是否使用正确的包名。`libbluetooth-dev` 是通常用于 Debian 系统的开发依赖包，但如果它没有被安装，系统就无法找到 `bluetooth/bluetooth.h` 和 `bluetooth/rfcomm.h` 等头文件，进而导致编译错误。
+
+为了解决这个问题，我会先尝试安装 `libbluetooth-dev`。如果你使用的是 Debian 或 Ubuntu 系统，可以通过以下命令安装该依赖包。  
+
+另外，代码中的其他部分看起来是正确的，尤其是函数调用和参数传递方面。唯一的潜在问题就是需要正确安装并链接 `libbluetooth-dev` 包。
+
+</think process>
+
+<pkg install cmd>  
+apt install libbluetooth-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <sys/socket.h>  
+#include <sys/ioctl.h>  
+#include <unistd.h>  
+#include <bluetooth/bluetooth.h>  
+#include <bluetooth/rfcomm.h>  
+
+#define RFCOMM_IOCTL_CMD 0x80045559  // RFCOMM相关IOCTL命令（假设一个可能的命令）
+
+int main() {  
+    int sock;  
+    struct sockaddr_rc addr = { 0 };  
+
+    // 创建一个 RFCOMM 套接字  
+    sock = socket(AF_BLUETOOTH, SOCK_STREAM, BTPROTO_RFCOMM);  
+    if (sock < 0) {  
+        perror("Socket creation failed");  
+        return -1;  
+    }
+
+    // 设置 RFCOMM 地址  
+    addr.rc_family = AF_BLUETOOTH;  
+    str2ba("00:11:22:33:44:55", &addr.rc_bdaddr);  // 用合适的设备地址
+
+    // 连接到远程 RFCOMM 设备  
+    if (connect(sock, (struct sockaddr *)&addr, sizeof(addr)) < 0) {  
+        perror("Connection failed");  
+        close(sock);  
+        return -1;  
+    }
+
+    // 发送 IOCTL 命令来触发内核的 __rfcomm_dev_add 调用  
+    if (ioctl(sock, RFCOMM_IOCTL_CMD) < 0) {  
+        perror("IOCTL failed");  
+        close(sock);  
+        return -1;  
+    }
+
+    printf("RFCOMM device added successfully\n");
+
+    // 关闭套接字  
+    close(sock);  
+    return 0;  
+}
+</code>
+
+<compile cmd> gcc test_case_rfcomm_ioctl.c -o test_case_rfcomm_ioctl -lbluetooth </compile cmd>

@@ -1,0 +1,102 @@
+<think process>  
+从报错信息来看，错误提示“/bin/sh: 1: libpcap-dev: not found”表明系统尝试执行了一个名为 `libpcap-dev` 的命令，但是找不到这个命令。这是因为 `libpcap-dev` 是一个开发库包，而不是一个可以执行的命令。
+
+原因分析：
+1. 我们在 `pkg install cmd` 中提到了 `libpcap-dev`，但是它是一个编译时依赖库，不是可执行命令。因此，编译时的安装命令需要安装该依赖项，而不是尝试将它作为执行命令来运行。
+2. 另外，代码中的 `#include <pcap.h>` 和 `-lpcap` 并未实际用到，因此不需要依赖 `libpcap-dev`。我们应该移除对 `libpcap-dev` 的依赖。如果不打算使用 pcap 相关的功能，可以安全地去除对该库的引用。
+
+解决方案：
+- 只保留必需的库和头文件。
+- 移除 `#include <pcap.h>` 和 `-lpcap`，因为代码目前不依赖这个库。
+
+</think process>
+
+<pkg install cmd>  
+libpcap-dev  # 这个依赖可删除，如若不使用 pcap 库  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <linux/ipsec.h>
+#include <linux/netlink.h>
+#include <linux/pfkeyv2.h>
+
+#define PFKEY_VERSION 2
+#define PFKEY_MSG_TIMEOUT 5
+
+int main() {
+    int sockfd;
+    struct sockaddr_nl sa;
+    struct pfkey_msg msg;
+    struct sadb_msg *sadb;
+    struct sadb_sa *sadb_sa;
+    struct sadb_address *src, *dst;
+    struct sockaddr_in src_addr, dst_addr;
+
+    // 创建 PF_KEY 套接字
+    sockfd = socket(AF_NETLINK, SOCK_RAW, PF_KEY);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    memset(&sa, 0, sizeof(sa));
+    sa.nl_family = AF_NETLINK;
+    sa.nl_pid = getpid();
+    if (bind(sockfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        perror("bind");
+        close(sockfd);
+        return -1;
+    }
+
+    // 初始化 PF_KEY 消息
+    memset(&msg, 0, sizeof(msg));
+    msg.version = PFKEY_VERSION;
+    msg.type = SADB_ADD;
+    msg.len = PFKEY_MSG_TIMEOUT;
+    sadb = (struct sadb_msg *)&msg;
+    sadb->sadb_msg_version = PFKEY_VERSION;
+    sadb->sadb_msg_type = SADB_ADD;
+    sadb->sadb_msg_len = sizeof(struct sadb_msg) / 8;
+
+    // 配置 SA 信息
+    sadb_sa = (struct sadb_sa *)((char *)sadb + sizeof(struct sadb_msg));
+    sadb_sa->sadb_sa_len = sizeof(struct sadb_sa) / 8;
+    sadb_sa->sadb_sa_id = 1; // SA ID
+    sadb_sa->sadb_sa_spi = 0xdeadbeef; // SPI
+
+    // 配置源和目标地址
+    src = (struct sadb_address *)((char *)sadb_sa + sizeof(struct sadb_sa));
+    dst = (struct sadb_address *)((char *)src + sizeof(struct sadb_address));
+
+    memset(&src_addr, 0, sizeof(src_addr));
+    src_addr.sin_family = AF_INET;
+    src_addr.sin_addr.s_addr = inet_addr("192.168.1.1");
+
+    memset(&dst_addr, 0, sizeof(dst_addr));
+    dst_addr.sin_family = AF_INET;
+    dst_addr.sin_addr.s_addr = inet_addr("192.168.1.2");
+
+    memcpy(&src->sadb_address, &src_addr, sizeof(src_addr));
+    memcpy(&dst->sadb_address, &dst_addr, sizeof(dst_addr));
+
+    // 发送消息
+    if (send(sockfd, &msg, sizeof(msg), 0) < 0) {
+        perror("send");
+        close(sockfd);
+        return -1;
+    }
+
+    printf("PF_KEY message sent successfully\n");
+    close(sockfd);
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_xfrm_state_alloc.c -o test_case_xfrm_state_alloc -lnl-3  
+</compile cmd>

@@ -1,0 +1,44 @@
+<think process>  
+根据错误信息 `/bin/sh: 1: libc6-dev: not found`，该错误提示表明系统找不到 `libc6-dev` 包。这个问题并不是源自 C 语言代码本身，而是与系统的包管理有关。具体分析如下：
+
+1. `libc6-dev` 是 Linux 上的一个开发库，通常包含标准 C 库的头文件和实现文件。在大多数情况下，它应该通过包管理工具（如 `apt`）自动安装。
+2. 错误信息显示尝试运行 `libc6-dev` 作为命令，但该命令并不存在。实际上，这不是一个可执行程序，而是一个开发包。该错误的根本原因可能是尝试通过错误的方式运行它。
+3. 可能的原因是您尝试运行 `apt install libc6-dev` 时遇到了某种系统路径或依赖问题。
+
+建议的解决步骤：
+- 确保依赖安装命令在正确的环境中执行。
+- 清理缓存，更新 apt 包管理器，确保包管理器能正确识别并安装依赖。
+- 执行安装命令时，确保没有误将 `libc6-dev` 当作可执行文件。
+
+</think process>  
+<pkg install cmd>  
+apt update  
+apt install libc6-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sched.h>
+#include <unistd.h>
+
+int main() {
+    // 使用 unshare 创建新的用户命名空间
+    if (unshare(CLONE_NEWUSER) == -1) {
+        perror("unshare");
+        return 1;
+    }
+
+    // 成功创建新的用户命名空间
+    printf("Created new user namespace\n");
+
+    // 继续执行其它操作，确保新的命名空间生效
+    // 此处可以添加更多逻辑以验证命名空间的创建和使用
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc test_case_create_user_ns.c -o test_case_create_user_ns  
+</compile cmd>  

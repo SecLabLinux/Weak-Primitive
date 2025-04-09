@@ -1,0 +1,1 @@
+gcc -o test_case_rpc_alloc_task test_case_rpc_alloc_task.c -lnfs4

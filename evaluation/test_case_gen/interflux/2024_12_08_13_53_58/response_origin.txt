@@ -1,0 +1,56 @@
+<think process>  
+根据你提供的内核调用栈，`do_sys_poll` 是用于处理系统调用 `poll` 或 `ppoll` 的核心函数。该函数在内核中用于等待文件描述符上的事件。通过栈追溯，我们可以看到以下重要点：
+1. `do_sys_poll` 是进入内核的函数，处理 `poll` 系统调用。
+2. 栈中的多个函数涉及到不同的系统架构兼容性层（例如 `compat`、`x64`、`ia32`），这意味着在 32 位和 64 位模式下，系统调用会有所不同。
+3. `sys_call_table` 中的 `x64_sys_call`、`x32_sys_call` 负责调度对应的系统调用处理函数。
+
+为了触发 `do_sys_poll`，我们可以编写一个用户态程序，使用 `poll` 系统调用。`poll` 调用会触发 `do_sys_poll` 的执行，进而进入内核。此程序可以在 Linux 系统上使用一个简单的 `poll` 调用来测试。
+
+我们将编写一个包含几个文件描述符的 `poll` 测试用例，模拟一个需要等待文件描述符事件的情况。为了简单起见，可以使用标准输入输出（stdin 和 stdout）和一个定时器文件描述符。
+
+此时，我们可以编写一个简单的 C 程序，它通过 `poll` 等待 stdin 的可读事件。
+
+</think process>
+
+<pkg install cmd>  
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <poll.h>
+
+int main() {
+    struct pollfd fds[2];
+    int ret;
+
+    // 监视标准输入(stdin)是否可读
+    fds[0].fd = STDIN_FILENO;
+    fds[0].events = POLLIN;
+
+    // 监视一个定时器文件描述符，暂时设置为无效（-1）
+    fds[1].fd = -1;  
+    fds[1].events = POLLIN;
+
+    // 调用 poll，等待事件发生
+    ret = poll(fds, 2, 5000);  // 等待 5 秒
+    if (ret == -1) {
+        perror("poll");
+        exit(1);
+    }
+
+    if (ret == 0) {
+        printf("No events within 5 seconds.\n");
+    } else {
+        if (fds[0].revents & POLLIN) {
+            printf("Data is available on stdin.\n");
+        }
+    }
+
+    return 0;
+}
+</code>
+
+<code name> test_case_poll.c </code name>
+
+<compile cmd> gcc test_case_poll.c -o test_case_poll -lpthread </compile cmd>

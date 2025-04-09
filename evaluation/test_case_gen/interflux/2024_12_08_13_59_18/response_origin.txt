@@ -1,0 +1,81 @@
+<think process>  
+根据你提供的调用栈信息，函数 `ip_mc_source` 是通过一系列的 `setsockopt` 调用间接触发的，且涉及多个协议栈的层次。`setsockopt` 系统调用是触发内核函数的主要方式。因此，我们需要通过在用户态程序中发起对套接字的 `setsockopt` 调用来测试内核函数 `ip_mc_source`。
+
+### 关键步骤：
+1. `setsockopt` 是启动调用链的核心，首先在用户态创建一个套接字（如 UDP 套接字）。
+2. 在套接字上执行 `setsockopt` 调用，并传递相应的选项，可能会触发 `ip_mc_source` 函数。
+3. 根据调用栈，`setsockopt` 会触发多个中间层函数，这些函数最终调用 `do_ip_setsockopt`，而 `do_ip_setsockopt` 会调用 `ip_mc_source`。
+
+### 选择的测试用例：
+- 我们可以选择一个 IP 多播设置相关的选项，例如 `IP_MULTICAST_IF`，它与 `ip_mc_source` 有关系。
+- 在设置多播接口选项时，会通过内核栈调用到 `ip_mc_source`。
+
+### 实现思路：
+- 使用 UDP 套接字并设置 `IP_MULTICAST_IF`。
+- 通过设置这个选项来触发内核中的 `ip_mc_source` 函数。
+
+这样，我们的测试用例就可以覆盖调用链中包含 `ip_mc_source` 的路径。
+
+</think process>
+
+<code>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+#include <netinet/ip_icmp.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
+int main() {
+    int sockfd;
+    struct ip_mreqn mreq;
+    struct sockaddr_in sa;
+
+    // 创建一个UDP套接字
+    sockfd = socket(AF_INET, SOCK_DGRAM, 0);
+    if (sockfd < 0) {
+        perror("Socket creation failed");
+        return 1;
+    }
+
+    // 设置多播接口
+    mreq.imr_multiaddr.s_addr = inet_addr("224.0.0.1"); // 多播地址
+    mreq.imr_interface.s_addr = INADDR_ANY; // 默认网络接口
+    mreq.imr_ifindex = 0;
+
+    // 设置IP_MULTICAST_IF选项
+    if (setsockopt(sockfd, IPPROTO_IP, IP_MULTICAST_IF, &mreq, sizeof(mreq)) < 0) {
+        perror("setsockopt IP_MULTICAST_IF failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Multicast interface set successfully.\n");
+
+    // 发送数据（也可以选择不发送，仅测试设置选项即可）
+    sa.sin_family = AF_INET;
+    sa.sin_port = htons(12345);
+    sa.sin_addr.s_addr = inet_addr("224.0.0.1");
+
+    char msg[] = "Hello, Multicast!";
+    if (sendto(sockfd, msg, sizeof(msg), 0, (struct sockaddr*)&sa, sizeof(sa)) < 0) {
+        perror("Send failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Message sent to multicast group.\n");
+
+    close(sockfd);
+    return 0;
+}
+</code>
+
+<code name> test_case_ip_mc_source.c </code name>
+
+<compile cmd> gcc -o test_case_ip_mc_source test_case_ip_mc_source.c </compile cmd>

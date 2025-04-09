@@ -1,0 +1,1 @@
+gcc -lgssapi_krb5 test_case_gssapi_context.c -o test_case_gssapi_context

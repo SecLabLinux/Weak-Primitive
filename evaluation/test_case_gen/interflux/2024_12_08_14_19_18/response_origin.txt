@@ -1,0 +1,49 @@
+<think process>  
+在内核调用栈中，`alloc_ucounts` 是一个在内核内用于分配用户计数（user counts）的函数。这个函数被 `inc_ucount` 调用，而 `inc_ucount` 又是通过 `__do_sys_fanotify_init` 等调用链最终被触发。
+
+根据调用栈分析，可以看到 `fanotify` 相关的系统调用（如 `sys_fanotify_init`）在栈中处于关键位置。因此，为了让 `alloc_ucounts` 被触发，我们可以通过触发 `fanotify_init` 系统调用来达到目标。
+
+具体步骤包括：
+1. 在用户态程序中调用 `fanotify_init`，该系统调用最终会触发 `alloc_ucounts`。
+2. 需要确保程序运行时具有足够的权限或设置，以便能够成功调用 `fanotify_init`。
+
+此外，由于 `fanotify_init` 会创建一个 `fanotify` 实例，并进行初始化，因此我们需要在用户态程序中正确地设置相关参数，并调用这个系统调用。此时内核会依次执行 `inc_ucount` 和 `alloc_ucounts`。
+
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/fanotify.h>
+
+int main() {
+    int fan_fd;
+    struct fanotify_event_metadata buf;
+    fan_fd = fanotify_init(FAN_CLASS_CONTENT, O_RDONLY);
+    if (fan_fd == -1) {
+        perror("fanotify_init failed");
+        return 1;
+    }
+
+    printf("fanotify initialized successfully, fd: %d\n", fan_fd);
+
+    while (1) {
+        ssize_t len = read(fan_fd, &buf, sizeof(buf));
+        if (len == -1) {
+            perror("read failed");
+            return 1;
+        }
+        if (len == 0)
+            continue;
+
+        // Further processing logic can be added here to simulate an event
+    }
+
+    close(fan_fd);
+    return 0;
+}
+<code name> test_case_fanotify_init.c </code name>
+<compile cmd> gcc -o test_case_fanotify_init test_case_fanotify_init.c </compile cmd>

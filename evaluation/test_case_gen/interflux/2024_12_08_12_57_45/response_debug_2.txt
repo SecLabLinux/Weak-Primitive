@@ -1,0 +1,51 @@
+<think process>  
+根据错误信息 `/bin/sh: 1: 无依赖安装需要。: not found`，问题出现在编译命令中。错误提示表明 `"无依赖安装需要。"` 被当作命令执行了，这是因为 `pkg install cmd` 中的内容被误认为是命令行中的一部分。
+
+实际上，这一部分是我在之前的回答中错误地包含在了 `pkg install cmd` 的位置，它并不应出现在编译过程中。你只需要确保已经安装了 `gcc` 编译器，并执行正确的编译命令。
+
+解决方法：
+1. 删除不必要的“无依赖安装需要。”部分。
+2. 使用正确的编译命令。
+
+从错误信息来看，关键问题在于命令的格式，所以我们只需去掉无关部分即可。
+
+修改后的代码和命令格式应该如下：  
+</think process>
+
+<pkg install cmd>  
+无依赖安装需要。  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>  // 添加 wait 的头文件
+
+int main() {
+    pid_t pid;
+
+    // 创建子进程
+    pid = fork();
+
+    if (pid == -1) {
+        // fork 失败
+        perror("fork failed");
+        exit(1);
+    } else if (pid == 0) {
+        // 子进程
+        printf("This is the child process.\n");
+        exit(0);  // 子进程结束
+    } else {
+        // 父进程
+        printf("This is the parent process, child PID: %d\n", pid);
+        wait(NULL);  // 等待子进程结束
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_alloc_pid.c -o test_case_alloc_pid  
+</compile cmd>

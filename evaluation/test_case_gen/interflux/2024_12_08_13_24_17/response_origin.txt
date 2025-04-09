@@ -1,0 +1,65 @@
+<think process>  
+根据你提供的内核调用栈信息，目标是通过用户态程序触发 `qdisc_alloc` 内核函数。我们可以追踪该函数的调用路径，发现它是通过 `qdisc_create` 被调用的，且 `qdisc_create` 最终会在 `tc_modify_qdisc` 或其他一些调度类的初始化过程中被调用。
+
+### 目标函数：`qdisc_alloc`
+
+- **qdisc_alloc** 是内核中的一个网络调度器相关函数，用于分配并初始化队列调度器（Qdisc）。
+- 它会通过 `qdisc_create` 和 `tc_modify_qdisc` 被调用。为了触发 `qdisc_alloc`，需要操作网络设备上的队列调度器（例如通过 `tc` 命令）。
+
+### 触发路径：
+- `tc_modify_qdisc` 是触发 `qdisc_alloc` 的关键函数。
+- 通过 `tc` 命令或其 API 修改或创建 Qdisc，能够调用 `tc_modify_qdisc`，进而触发 `qdisc_alloc`。
+
+### 关键步骤：
+1. **创建或修改 Qdisc**：`tc` 命令会调用内核中的 `tc_modify_qdisc`，这是触发 `qdisc_alloc` 的入口函数。
+2. **使用适当的队列调度器类型**：可以选择一个常见的调度器，如 `htb` 或 `pfifo`。
+3. **网络接口**：需要指定操作的网络接口，确保能够触发调度器相关的内核操作。
+
+### 设计测试用例：
+1. 创建一个网络接口并配置它。
+2. 使用 `tc` API 或系统调用创建一个新的 Qdisc（如 `htb`）。
+3. 观察是否成功触发 `qdisc_alloc`。
+
+根据上述步骤，我们将设计一个 C 语言测试用例，通过系统调用 `tc` 来创建和修改 Qdisc，从而间接触发 `qdisc_alloc`。
+
+</think process>
+
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    // Step 1: 创建一个虚拟网络接口
+    system("ip link add name test0 type veth peer name test1");
+
+    // Step 2: 启动网络接口
+    system("ip link set dev test0 up");
+    system("ip link set dev test1 up");
+
+    // Step 3: 创建一个 HTB Qdisc
+    system("tc qdisc add dev test0 root handle 1: htb default 12");
+
+    // Step 4: 修改 Qdisc，触发 qdisc_alloc
+    system("tc qdisc change dev test0 root handle 1: htb default 12");
+
+    // Step 5: 清理资源
+    system("ip link set dev test0 down");
+    system("ip link set dev test1 down");
+    system("ip link delete test0");
+    system("ip link delete test1");
+
+    return 0;
+}
+</code>
+
+<code name> test_case_qdisc_alloc.c </code name>
+
+<compile cmd>  
+gcc test_case_qdisc_alloc.c -o test_case_qdisc_alloc  
+</compile cmd>

@@ -1,0 +1,41 @@
+<think process>  
+根据给定的内核函数 `nft_pipapo_init`，它位于 `nft_set_pipapo.c` 文件中，通常与 Netfilter 框架的初始化或设置相关。从调用栈来看，该函数是一个初始化函数，它可能涉及某些与 nftables 相关的资源或操作。因此，我们需要通过某些方式触发 Netfilter 的功能，特别是 nftables 的初始化。
+
+在用户态程序中，我们通常使用 `nft` 命令或者通过 `libnftnl` 这样的库来交互。这里我们可以编写一个简单的用户态程序，通过配置 nftables 的规则来触发内核中的初始化过程。用户态程序可以创建或修改 nftables 表、链或规则，从而使得内核函数 `nft_pipapo_init` 被调用。
+
+通常情况下，`nft_pipapo_init` 是在某些表初始化时被调用，因此我们可以通过创建一个新的 nftables 表并进行一些基本配置，触发相关初始化函数的执行。
+
+在用户态程序中，我们可以使用 `nft` 命令或者直接使用 `libnftnl` 进行 nftables 操作。为了简化，我们选择使用 `system()` 函数调用 `nft` 命令，这样可以触发相关的内核初始化函数。
+
+接下来的步骤是编写一个 C 程序，调用 `nft` 命令，创建一个表，链和规则，以确保触发 `nft_pipapo_init` 函数。
+
+</think process>
+
+<pkg install cmd>  
+
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 创建一个 nftables 表
+    system("nft add table inet test_table");
+    
+    // 创建一个链
+    system("nft add chain inet test_table test_chain { type filter hook input priority 0; }");
+
+    // 创建一个规则
+    system("nft add rule inet test_table test_chain ip saddr 192.168.1.1 accept");
+
+    // 进行一些操作，以触发内核中的初始化
+    printf("nftables configuration completed, triggering nft_pipapo_init...\n");
+
+    return 0;
+}
+</code>
+
+<code name> test_case_nft_pipapo_init.c </code name>
+
+<compile cmd> gcc test_case_nft_pipapo_init.c -o test_case_nft_pipapo_init </compile cmd>

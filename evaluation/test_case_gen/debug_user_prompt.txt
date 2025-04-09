@@ -1,0 +1,21 @@
+Error in C code:
+{code}
+
+C code filename:
+{code_name}
+
+Installed dependencies:
+{installed_pkg}
+
+Error message:
+{err_msg}
+
+Response format (please strictly follow the format):
+
+<think process> Step by step description of your error analysis process and necessary explanations </think process>
+
+<pkg install cmd> Compilation dependency installation commands that can be directly executed in shell, starting with apt install or pip install, based on debian system, without any markdown syntax prefix/suffix (e.g., apt install xxx). If not necessary, leave empty, do not output anything here </pkg install cmd>
+
+<code> Modified C code, without any markdown syntax prefix/suffix </code>
+
+<compile cmd> Modified compilation command, if no modification needed, keep original. Without any markdown syntax prefix/suffix. </compile cmd>

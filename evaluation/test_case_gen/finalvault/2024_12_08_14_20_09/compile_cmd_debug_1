@@ -1,0 +1,1 @@
+gcc -o test_case_io_uring test_case_io_uring.c -luring

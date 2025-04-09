@@ -1,0 +1,3 @@
+ nf_tables_newset
+/ nf_tables_api.c
+\ call

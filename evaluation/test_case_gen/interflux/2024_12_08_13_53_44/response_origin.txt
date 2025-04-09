@@ -1,0 +1,44 @@
+<think process>  
+1. **理解目标内核函数**：首先，我们的目标是触发内核中的 `nf_tables_newrule` 函数。根据调用栈信息，`nf_tables_newrule` 出现在 `nf_tables_api.c` 文件中，并且由某个函数调用。为了使内核函数被调用，我们需要触发与网络过滤相关的操作，特别是涉及 `nf_tables` 子系统的操作。
+
+2. **nf_tables 介绍**：`nf_tables` 是 Linux 内核中用于管理网络过滤规则的一个框架，作为 `iptables` 的替代。`nf_tables_newrule` 很可能是在创建一个新的过滤规则时被调用。
+
+3. **触发条件**：为了触发 `nf_tables_newrule`，我们需要使用一些能够创建新的过滤规则的操作。`iptables` 和 `nft` 都是与 `nf_tables` 交互的工具。通过 `nft` 命令可以直接操作 `nf_tables`，从而调用到 `nf_tables_newrule`。
+
+4. **用户态代码设计**：我们需要编写一个用户态程序来调用 `nft` 命令或直接操作 `netlink` 套接字与内核交互，创建新的规则。在这个过程中，调用到的内核函数 `nf_tables_newrule` 是与新规则的创建直接相关的。
+
+5. **思路**：使用 C 语言编写一个程序，通过 `nft` 命令接口或通过 `netlink` 创建一个新的规则。程序需要调用系统的 `nft` 命令来创建规则，从而间接调用 `nf_tables_newrule`。
+
+6. **验证步骤**：编写完程序后，我们需要运行它，并且确保通过内核调试工具（如 `dmesg` 或内核日志）检查是否触发了 `nf_tables_newrule`。
+
+</think process>
+
+<pkg install cmd>  
+
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 使用系统命令 nft 创建一个新的过滤规则
+    // 这里使用简单的命令创建一个允许所有流量通过的规则
+    printf("Creating nf_tables rule...\n");
+
+    // 创建一个表（若不存在），然后创建一个链
+    system("nft add table inet filter");
+    system("nft add chain inet filter input { type filter hook input priority 0 \; }");
+
+    // 创建规则：允许所有流量通过
+    system("nft add rule inet filter input accept");
+
+    printf("nf_tables rule created successfully!\n");
+
+    return 0;
+}
+</code>  
+
+<code name> test_case_nft_rule.c </code name>  
+
+<compile cmd> gcc test_case_nft_rule.c -o test_case_nft_rule </compile cmd>  

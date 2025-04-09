@@ -1,0 +1,35 @@
+<think process>  
+从调用栈上来看，`nf_tables_newset` 位于 `nf_tables_api.c` 文件中。根据这个文件名和函数名推测，`nf_tables_newset` 可能涉及到 Netfilter 的“表”和“集合”的操作，可能是为 nf_tables 创建新的集合。根据这个信息，想要触发这个函数，我们需要通过用户态程序进行与 Netfilter 表相关的操作，尤其是在 `nf_tables` 这一子系统下进行表和集合的创建。
+
+首先，我们需要确认如何使用 `nf_tables`，这通常通过 `iptables` 或者类似的命令行工具来配置。为了测试，我们可以直接在用户态程序中通过系统调用（如 `system()`）来模拟命令执行，触发内核中的相关处理，从而调用 `nf_tables_newset`。
+
+由于 `nf_tables` 在内核中和网络过滤器相关，通常需要网络相关的权限或配置支持。因此，在测试代码中，我们可以使用 `iptables` 命令来创建新的 Netfilter 表和集合，从而触发 `nf_tables_newset`。这个过程的核心是调用 `iptables` 工具的相应命令，模拟网络过滤表的操作。
+
+另外，由于 `nf_tables` 是在内核中处理的，我们的用户态程序实际上只是一个触发器，依赖于现有的 `iptables` 等命令来调用内核函数。
+
+</think process>  
+<pkg install cmd>  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 使用 system 调用创建一个新的 netfilter 表和集合，触发 nf_tables_newset 函数
+    printf("Creating a new netfilter table and set...\n");
+
+    // 创建新的 nf_tables 表
+    system("iptables -t raw -N my_raw_table");
+
+    // 创建新的集合（假设有支持的命令来操作集合）
+    system("iptables -t raw -A my_raw_table -m set --match-set my_set src");
+
+    printf("Netfilter table and set created.\n");
+
+    return 0;
+}
+</code>  
+<code name> test_case_nf_tables.c </code name>  
+<compile cmd>  
+gcc test_case_nf_tables.c -o test_case_nf_tables  
+</compile cmd>  

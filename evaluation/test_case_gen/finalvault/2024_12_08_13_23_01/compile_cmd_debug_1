@@ -1,0 +1,1 @@
+gcc -o test_case_sctp_connect test_case_sctp_connect.c -lsctp

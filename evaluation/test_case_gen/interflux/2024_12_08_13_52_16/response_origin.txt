@@ -1,0 +1,42 @@
+<think process>  
+要编写一个测试用例，使得内核能够调用 `create_user_ns` 函数，我们需要从内核调用栈中提取出相关的信息，分析每个步骤的含义。  
+1. `create_user_ns` 是一个内核函数，用于创建一个新的用户命名空间。该函数的调用通常发生在通过 `unshare_userns` 或类似的系统调用时。  
+2. 调用栈显示该函数在 `copy_creds` 函数内被调用，而 `copy_creds` 又是在 `copy_process` 内被调用。`copy_process` 是一个创建进程的过程，因此我们需要通过创建进程来触发该栈。  
+3. `create_user_ns` 的调用涉及到创建新进程，因此我们可以使用 `clone` 或 `fork` 系统调用。  
+4. 因为 `create_user_ns` 是通过 `unshare_userns` 触发的，而 `unshare_userns` 会触发 `ksys_unshare` 函数，在该过程中创建新的命名空间，因此通过调用 `unshare` 或类似接口可以触发该行为。  
+5. 为了简化，我们可以通过 `unshare` 系统调用创建新的用户命名空间来触发内核函数 `create_user_ns`。  
+
+我们将编写一个 C 语言程序，使用 `unshare` 系统调用，并结合 `CLONE_NEWUSER` 标志来创建新的用户命名空间，从而触发内核函数 `create_user_ns` 的调用。
+
+</think process>  
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sched.h>
+#include <unistd.h>
+
+int main() {
+    // 使用 unshare 创建新的用户命名空间
+    if (unshare(CLONE_NEWUSER) == -1) {
+        perror("unshare");
+        return 1;
+    }
+
+    // 成功创建新的用户命名空间
+    printf("Created new user namespace\n");
+
+    // 继续执行其它操作，确保新的命名空间生效
+    // 此处可以添加更多逻辑以验证命名空间的创建和使用
+
+    return 0;
+}
+</code>  
+<code name> test_case_create_user_ns.c </code name>  
+<compile cmd>  
+gcc test_case_create_user_ns.c -o test_case_create_user_ns  
+</compile cmd>  

@@ -1,0 +1,38 @@
+<think process>  
+报错信息 `/bin/sh: 1: iproute2: not found` 显示的是系统未找到 `iproute2` 命令。根据错误信息，实际上是因为 `system()` 调用的命令字符串中使用了 `iproute2`，但 `iproute2` 并不是一个单独的命令，而是一个包含多个命令的工具集，例如 `ip`、`tc` 等。实际上，系统应该检测到的是 `ip` 和 `tc` 命令。
+
+因此，问题的根源是 `system()` 调用的命令字符串不正确，尝试执行 `iproute2` 而非具体的 `ip` 和 `tc` 命令。应该使用具体的 `ip` 和 `tc` 命令来执行网络相关操作。
+
+解决方法是修改命令字符串，确保调用的是正确的命令。
+
+</think process>  
+<pkg install cmd>  
+iproute2  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 创建一个虚拟网桥接口
+    system("ip link add name veth0 type veth peer name veth1");
+
+    // 激活接口
+    system("ip link set dev veth0 up");
+    system("ip link set dev veth1 up");
+
+    // 使用 tc 创建并配置默认的队列调度器
+    system("tc qdisc add dev veth0 root handle 1: htb default 12");
+
+    // 配置一个简单的队列调度器
+    system("tc class add dev veth0 parent 1: classid 1:1 htb rate 10mbit");
+
+    // 验证队列调度器是否已被配置
+    system("tc -s qdisc show dev veth0");
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc test_case_qdisc_alloc.c -o test_case_qdisc_alloc -lpcap  
+</compile cmd>  

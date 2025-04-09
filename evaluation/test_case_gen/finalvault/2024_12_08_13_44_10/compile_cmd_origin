@@ -1,0 +1,1 @@
+gcc -o test_case_fanotify_init test_case_fanotify_init.c

@@ -1,0 +1,5 @@
+config SHADOW_HEAP
+    bool "Enable Shadow Heap"
+    default n
+    help
+      Enable the Shadow Heap memory protection mechanism.

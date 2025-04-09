@@ -1,0 +1,39 @@
+<think process>  
+首先，我们需要分析内核函数 `qdisc_alloc` 的调用栈。`qdisc_alloc` 是一个用于分配队列调度器（Qdisc）的函数，它通常在创建或修改网络设备的队列调度时被调用。从调用栈的层次结构来看，`qdisc_alloc` 被 `qdisc_create` 调用，而 `qdisc_create` 又是由 `tc_modify_qdisc` 调用，进一步的调用路径涉及到多个与网络设备（如 `dev_activate`）和网络队列调度器（如 `attach_default_qdiscs`）相关的操作。
+
+为了触发 `qdisc_alloc`，我们可以通过修改网络接口的队列调度器。通常，`tc`（Traffic Control）工具用于操作队列调度器。因此，我们可以编写一个用户态程序来调用 `tc` 命令，创建或修改队列调度器，从而触发内核中的 `qdisc_alloc`。
+
+在测试用例中，我们将创建一个虚拟网络接口，设置其默认的队列调度器，并通过系统调用触发 `tc` 命令来修改队列调度器，从而间接触发 `qdisc_alloc`。
+
+<pkg install cmd>  
+apt install iproute2
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
+int main() {
+    // 创建一个虚拟网络接口
+    system("ip link add dev veth0 type veth peer name veth1");
+
+    // 激活接口
+    system("ip link set dev veth0 up");
+    system("ip link set dev veth1 up");
+
+    // 通过 tc 修改队列调度器，触发 qdisc_alloc
+    system("tc qdisc add dev veth0 root handle 1: htb default 12");
+
+    // 释放资源
+    system("ip link delete dev veth0");
+    system("ip link delete dev veth1");
+
+    return 0;
+}
+</code>  
+
+<code name> test_case_qdisc_alloc.c </code name>  
+
+<compile cmd>  
+gcc test_case_qdisc_alloc.c -o test_case_qdisc_alloc  
+</compile cmd>  

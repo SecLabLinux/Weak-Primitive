@@ -1,0 +1,88 @@
+<think process>  
+首先，我们分析调用栈的结构。`__io_alloc_req_refill` 是核心函数，它在 `io_alloc_req` 中被调用，进而通过 `io_alloc_notif` 和 `io_send_zc_prep` 被调用。进一步向上，调用栈指向 `io_submit_sqes` 和相关的 `sys_io_uring_enter` 系统调用，最终引发用户态程序中关于 I/O 操作的行为。结合这一信息，程序的目标是通过触发 `io_uring` 的相关系统调用，间接地调用到 `__io_alloc_req_refill`。
+
+为了触发该函数，我们可以设计一个用户态程序，主要目标是：
+1. 触发 `io_uring` 操作，执行与队列提交相关的行为；
+2. 确保调用路径经过 `io_submit_sqes`，以便最终进入 `__io_alloc_req_refill`。
+
+`io_uring` 提供了高效的异步 I/O 操作接口，使用 `io_uring` 提交队列提交工作是触发该调用栈的关键步骤。
+
+程序的步骤包括：
+- 初始化 `io_uring` 实例。
+- 准备提交队列和请求。
+- 使用 `io_uring` 提交一个 I/O 操作（如文件读写或其他操作）。
+- 调用 `io_uring_enter`，进入内核空间，进行相关操作。
+
+这些步骤会通过 `io_submit_sqes` 进而进入 `__io_alloc_req_refill`。
+
+因此，程序需要:
+1. 初始化一个 `io_uring` 实例。
+2. 创建并提交一个队列请求，执行一次提交操作，确保内核调用路径通过我们希望触发的函数。
+
+<code>  
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <linux/io_uring.h>
+#include <string.h>
+#include <errno.h>
+#include <stdlib.h>
+
+#define BUFFER_SIZE 4096
+
+int main() {
+    struct io_uring ring;
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    int fd, ret;
+    char buffer[BUFFER_SIZE];
+
+    // 初始化 io_uring
+    ret = io_uring_queue_init(2, &ring, 0);
+    if (ret) {
+        perror("io_uring_queue_init");
+        return 1;
+    }
+
+    // 打开文件
+    fd = open("test_file.txt", O_RDWR | O_CREAT, 0644);
+    if (fd < 0) {
+        perror("open");
+        return 1;
+    }
+
+    // 准备 SQE (提交队列元素)
+    memset(buffer, 'A', BUFFER_SIZE);
+    sqe = io_uring_get_sqe(&ring);
+    io_uring_prep_write(sqe, fd, buffer, BUFFER_SIZE, 0);
+
+    // 提交 I/O 请求
+    io_uring_submit(&ring);
+
+    // 获取并处理完成队列元素
+    ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret) {
+        perror("io_uring_wait_cqe");
+        return 1;
+    }
+
+    // 打印完成队列元素的返回值
+    if (cqe->res < 0) {
+        fprintf(stderr, "I/O failed: %s\n", strerror(-cqe->res));
+    } else {
+        printf("I/O succeeded: %d bytes written\n", cqe->res);
+    }
+
+    // 标记 CQE 已处理
+    io_uring_cqe_seen(&ring, cqe);
+
+    // 清理资源
+    close(fd);
+    io_uring_queue_exit(&ring);
+
+    return 0;
+}
+<code>  
+<code name> test_case_io_uring.c </code name>  
+<compile cmd> gcc -o test_case_io_uring test_case_io_uring.c -luring </compile cmd>

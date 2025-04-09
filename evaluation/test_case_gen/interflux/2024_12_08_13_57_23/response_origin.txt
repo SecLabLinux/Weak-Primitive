@@ -1,0 +1,37 @@
+<think process>  
+根据调用栈，可以看到 `create_nsproxy` 这个内核函数是在 `create_new_namespaces` 的过程中被调用的。该过程涉及到多个函数链条，包括进程创建、工作队列的处理等，最终到达了 `create_nsproxy`。为了测试该函数的调用，我们需要通过创建和操作不同类型的命名空间（namespace）来触发它。可以通过系统调用 `unshare` 或 `setns` 来操作命名空间。
+
+1. **理解调用栈**：  
+   - `create_nsproxy` 是创建一个新的命名空间代理（nsproxy）的核心函数。该函数主要通过 `create_new_namespaces` 创建新的命名空间，在这个过程中会涉及到多个子过程。
+   - `unshare` 或 `setns` 系统调用会改变进程的命名空间，从而可能触发 `create_nsproxy`。
+
+2. **选择合适的测试方法**：  
+   - `unshare` 系统调用是创建新的命名空间的一种方式，可以通过它来触发 `create_nsproxy`。`unshare` 允许我们分离特定的命名空间（例如，PID、网络或用户命名空间），从而模拟实际环境中命名空间的创建。
+
+3. **编写测试用例**：  
+   - 使用 `unshare` 来创建新的命名空间。我们可以选择一个特定的命名空间类型，比如 `CLONE_NEWNET`（网络命名空间）或 `CLONE_NEWUSER`（用户命名空间）。这些操作会触发 `create_nsproxy` 函数的调用。
+
+4. **命名空间类型选择**：  
+   - 选择 `CLONE_NEWUSER`，因为它可以在没有额外依赖的情况下简单地演示如何创建一个新的命名空间，从而触发 `create_nsproxy`。
+
+</think process>  
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sched.h>
+
+int main() {
+    // 使用 unshare 系统调用创建一个新的用户命名空间
+    if (unshare(CLONE_NEWUSER) == -1) {
+        perror("unshare failed");
+        return 1;
+    }
+
+    printf("Successfully created a new user namespace!\n");
+    return 0;
+}
+</code>  
+<code name> test_case_create_nsproxy.c </code name>  
+<compile cmd> gcc test_case_create_nsproxy.c -o test_case_create_nsproxy -lrt </compile cmd>  

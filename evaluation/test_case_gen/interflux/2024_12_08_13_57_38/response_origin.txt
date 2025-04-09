@@ -1,0 +1,38 @@
+<think process> 根据提供的调用栈，我们的目标是触发 `create_nsproxy` 函数的调用。首先需要理解 `create_nsproxy` 函数是如何被调用的。它位于内核的 `create_new_namespaces` 中，而该函数又会调用 `copy_namespaces` 和其他一些内核任务函数。从用户态看，我们可以通过某些操作如 `setns`、`unshare` 等系统调用来间接触发内核的命名空间操作。因此，我的思考是，设计一个测试用例，通过 `unshare` 或 `setns` 系统调用来触发相关的内核函数。我们将通过 `unshare` 来尝试创建一个新的命名空间，这可能会最终引发 `create_nsproxy`。 </think process>
+
+<pkg install cmd> 
+
+<code> 
+#include <stdio.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int main() {
+    // 使用 unshare 来触发命名空间创建
+    if (unshare(CLONE_NEWNET) == -1) {
+        perror("unshare failed");
+        return 1;
+    }
+
+    // 在新的网络命名空间中创建一个进程
+    pid_t pid = fork();
+    if (pid == 0) {
+        // 子进程代码
+        printf("In new network namespace, PID: %d\n", getpid());
+        return 0;
+    } else if (pid > 0) {
+        // 父进程等待子进程
+        wait(NULL);
+    } else {
+        perror("fork failed");
+        return 1;
+    }
+
+    return 0;
+}
+</code>
+
+<code name> test_case_create_nsproxy.c </code name>
+
+<compile cmd> gcc test_case_create_nsproxy.c -o test_case_create_nsproxy </compile cmd>

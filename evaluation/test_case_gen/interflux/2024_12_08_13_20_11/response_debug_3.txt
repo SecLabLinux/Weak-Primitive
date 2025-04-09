@@ -1,0 +1,104 @@
+<think process>  
+从报错信息“/bin/sh: 1: libnl-3-dev: not found”来看，这个错误提示说明系统中找不到 `libnl-3-dev` 库。这个库是用于处理 `netlink` 通信的一个开发包，而在编译过程中它被指定为依赖项。
+
+错误的根源：
+1. `libnl-3-dev` 库在系统中没有安装。这个库是用于支持 `netlink` 编程的，因此它对涉及到 PF_KEY 或 `netlink` 编程的代码至关重要。
+2. 如果系统中没有安装该库，编译过程中会无法找到相关头文件和库文件，导致编译失败。
+
+解决方案：
+- 安装缺失的开发库 `libnl-3-dev`，该库包含了处理 `netlink` 协议所需的头文件和链接库。
+- 安装完成后，编译应该能够找到所需的头文件，解决报错问题。
+
+安装命令：`apt install libnl-3-dev`。
+
+</think process>
+
+<pkg install cmd>  
+apt install libnl-3-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <linux/ipsec.h>
+#include <linux/netlink.h>
+#include <linux/pfkeyv2.h>
+
+#define PFKEY_VERSION 2
+#define PFKEY_MSG_TIMEOUT 5
+
+int main() {
+    int sockfd;
+    struct sockaddr_nl sa;
+    struct pfkey_msg msg;
+    struct sadb_msg *sadb;
+    struct sadb_sa *sadb_sa;
+    struct sadb_address *src, *dst;
+    struct sockaddr_in src_addr, dst_addr;
+
+    // 创建 PF_KEY 套接字
+    sockfd = socket(AF_NETLINK, SOCK_RAW, PF_KEY);
+    if (sockfd < 0) {
+        perror("socket");
+        return -1;
+    }
+
+    memset(&sa, 0, sizeof(sa));
+    sa.nl_family = AF_NETLINK;
+    sa.nl_pid = getpid();
+    if (bind(sockfd, (struct sockaddr *)&sa, sizeof(sa)) < 0) {
+        perror("bind");
+        close(sockfd);
+        return -1;
+    }
+
+    // 初始化 PF_KEY 消息
+    memset(&msg, 0, sizeof(msg));
+    msg.version = PFKEY_VERSION;
+    msg.type = SADB_ADD;
+    msg.len = PFKEY_MSG_TIMEOUT;
+    sadb = (struct sadb_msg *)&msg;
+    sadb->sadb_msg_version = PFKEY_VERSION;
+    sadb->sadb_msg_type = SADB_ADD;
+    sadb->sadb_msg_len = sizeof(struct sadb_msg) / 8;
+
+    // 配置 SA 信息
+    sadb_sa = (struct sadb_sa *)((char *)sadb + sizeof(struct sadb_msg));
+    sadb_sa->sadb_sa_len = sizeof(struct sadb_sa) / 8;
+    sadb_sa->sadb_sa_id = 1; // SA ID
+    sadb_sa->sadb_sa_spi = 0xdeadbeef; // SPI
+
+    // 配置源和目标地址
+    src = (struct sadb_address *)((char *)sadb_sa + sizeof(struct sadb_sa));
+    dst = (struct sadb_address *)((char *)src + sizeof(struct sadb_address));
+
+    memset(&src_addr, 0, sizeof(src_addr));
+    src_addr.sin_family = AF_INET;
+    src_addr.sin_addr.s_addr = inet_addr("192.168.1.1");
+
+    memset(&dst_addr, 0, sizeof(dst_addr));
+    dst_addr.sin_family = AF_INET;
+    dst_addr.sin_addr.s_addr = inet_addr("192.168.1.2");
+
+    memcpy(&src->sadb_address, &src_addr, sizeof(src_addr));
+    memcpy(&dst->sadb_address, &dst_addr, sizeof(dst_addr));
+
+    // 发送消息
+    if (send(sockfd, &msg, sizeof(msg), 0) < 0) {
+        perror("send");
+        close(sockfd);
+        return -1;
+    }
+
+    printf("PF_KEY message sent successfully\n");
+    close(sockfd);
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc test_case_xfrm_state_alloc.c -o test_case_xfrm_state_alloc -lnl-3  
+</compile cmd>

@@ -1,0 +1,1 @@
+gcc -o test_case_sctp_transport_new test_case_sctp_transport_new.c -lsctp

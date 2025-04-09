@@ -1,0 +1,52 @@
+<think process>  
+根据报错信息 `/bin/sh: 1: libc6-dev: not found`，问题出现在 `libc6-dev` 包的安装上。错误提示表明该包未找到，说明可能是尝试以错误的方式安装依赖或包未正确安装。  
+`libc6-dev` 是标准的 C 语言开发库，通常是通过以下命令来安装的：`apt install libc6-dev`。但在错误信息中显示的情况可能是尝试直接将包名称当作命令来执行，导致找不到包文件。  
+解决方案是通过正确的命令来安装 `libc6-dev`，然后再继续编译代码。
+
+此外，代码部分并无明显的语法错误，问题主要集中在依赖包安装部分。确保安装正确的开发工具和库后，代码本身应能正常编译。  
+</think process>
+
+<pkg install cmd>  
+apt install libc6-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+int main() {
+    // 确保文件在 OverlayFS 文件系统上
+    const char *file_path = "/mnt/overlayfs/test_file.txt";
+    
+    // 打开文件
+    int fd = open(file_path, O_RDONLY);
+    if (fd == -1) {
+        perror("Failed to open file");
+        return 1;
+    }
+
+    // 读取文件
+    char buffer[256];
+    ssize_t bytes_read = read(fd, buffer, sizeof(buffer));
+    if (bytes_read == -1) {
+        perror("Failed to read file");
+        close(fd);
+        return 1;
+    }
+
+    // 打印读取内容
+    printf("Read %ld bytes from file: %.*s\n", bytes_read, (int)bytes_read, buffer);
+
+    // 关闭文件
+    close(fd);
+    
+    return 0;
+}
+</code>  
+
+<compile cmd>  
+gcc -o test_case_overlayfs_read test_case_overlayfs_read.c  
+</compile cmd>

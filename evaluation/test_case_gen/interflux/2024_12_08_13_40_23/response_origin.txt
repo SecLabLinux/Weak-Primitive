@@ -1,0 +1,88 @@
+<think process>  
+为了触发内核函数 `__io_alloc_req_refill`，我们需要通过执行一个能够涉及 I/O 请求分配的操作链。在给定的调用栈中，`__io_alloc_req_refill` 被 `io_alloc_req` 调用，而 `io_alloc_req` 又是由 `io_alloc_notif` 和 `io_submit_sqes` 触发的。进一步看，`io_submit_sqes` 是由 `__do_sys_io_uring_enter` 调用的，而 `__do_sys_io_uring_enter` 则源自于 `sys_io_uring_enter` 系统调用。因此，我们的目标是通过用户态程序触发 `io_uring` 相关的系统调用，从而最终间接触发 `__io_alloc_req_refill`。
+
+在这个过程中，我们将使用 `io_uring` 来提交一个异步 I/O 请求。`io_uring` 是一种现代的 Linux 异步 I/O 接口，它能够高效地提交和处理 I/O 请求。我们需要执行以下几个步骤：
+1. 创建一个 `io_uring` 实例。
+2. 提交一个 I/O 请求（例如一个简单的读取操作）。
+3. 通过 `io_uring_enter` 系统调用将请求提交到内核进行处理。
+
+我们通过模拟这种 I/O 提交，触发内核的 I/O 分配流程，从而到达 `__io_alloc_req_refill`。
+
+<pkg install cmd>  
+liburing-dev
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <liburing.h>
+
+#define BUFFER_SIZE 4096
+#define FILENAME "/tmp/io_uring_test_file"
+
+int main() {
+    struct io_uring ring;
+    struct io_uring_sqe *sqe;
+    struct io_uring_cqe *cqe;
+    int ret, fd;
+    char buffer[BUFFER_SIZE];
+    
+    // 创建一个文件来进行 I/O 操作
+    fd = open(FILENAME, O_CREAT | O_RDWR, 0666);
+    if (fd < 0) {
+        perror("open");
+        return 1;
+    }
+
+    // 创建 io_uring 实例
+    ret = io_uring_queue_init(32, &ring, 0);
+    if (ret) {
+        perror("io_uring_queue_init");
+        close(fd);
+        return 1;
+    }
+
+    // 准备一个提交队列条目 (SQE)，发起读取操作
+    sqe = io_uring_get_sqe(&ring);
+    io_uring_prep_read(sqe, fd, buffer, BUFFER_SIZE, 0);
+
+    // 提交请求到内核
+    ret = io_uring_submit(&ring);
+    if (ret < 0) {
+        perror("io_uring_submit");
+        io_uring_queue_exit(&ring);
+        close(fd);
+        return 1;
+    }
+
+    // 等待并获取完成队列条目 (CQE)
+    ret = io_uring_wait_cqe(&ring, &cqe);
+    if (ret < 0) {
+        perror("io_uring_wait_cqe");
+        io_uring_queue_exit(&ring);
+        close(fd);
+        return 1;
+    }
+
+    // 输出读取结果
+    if (cqe->res < 0) {
+        fprintf(stderr, "I/O failed with error %d\n", cqe->res);
+    } else {
+        printf("Read %d bytes: %s\n", cqe->res, buffer);
+    }
+
+    // 标记完成队列条目为已处理
+    io_uring_cqe_seen(&ring, cqe);
+
+    // 清理
+    io_uring_queue_exit(&ring);
+    close(fd);
+    return 0;
+}
+<code name> test_case_io_uring.c </code name>
+
+<compile cmd>  
+gcc -o test_case_io_uring test_case_io_uring.c -luring -lrt -pthread </compile cmd>  

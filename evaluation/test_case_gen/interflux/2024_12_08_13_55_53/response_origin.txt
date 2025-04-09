@@ -1,0 +1,68 @@
+<think process>  
+根据给定的调用栈，可以看到 `get_mountpoint` 函数最终由 `do_move_mount` 触发，而 `do_move_mount` 由 `__do_sys_move_mount` 调用，因此我们需要在用户态触发一个系统调用，以便将控制权转移到内核的相关路径。
+
+根据调用栈中的信息，`__do_sys_move_mount` 是通过 `sys_move_mount` 系统调用进入内核的，这个系统调用会经过多个层级，最终触发 `get_mountpoint`。因此，我们可以利用 `sys_move_mount` 作为测试用例的关键点。这个系统调用涉及到挂载操作，因此我们可以通过调用 `move_mount` 相关的接口来触发这个栈路径。
+
+从调用栈分析，`__do_sys_move_mount` 及其相关路径表明，系统调用会涉及到 `path_mount` 函数和 `do_move_mount`。为了触发 `get_mountpoint`，我们需要创建一个触发挂载操作的用户态程序。通过调用挂载操作，并特别注意创建一个与已有挂载点进行操作的路径，以确保系统调用进入内核时会执行 `get_mountpoint`。
+
+具体思路：
+1. 我们可以通过调用 `move_mount` 系统调用，将某个挂载点的路径移动或修改。
+2. 这会引发内核中的路径挂载相关操作，最终触发 `get_mountpoint`。
+
+此程序将在用户态通过系统调用触发 `move_mount`，从而进入 `get_mountpoint`。我们可以利用 `sys_move_mount` 函数提供的接口来创建挂载点，并对挂载点进行移动，从而让内核执行到 `get_mountpoint`。
+
+在程序中，我们可以手动构造挂载点的路径，利用 `mount` 或者类似的系统调用，结合现有的文件系统路径，确保触发内核中的相关代码路径。
+
+</think process>  
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/mount.h>
+#include <string.h>
+#include <unistd.h>
+
+int main() {
+    const char *source = "/tmp/source";
+    const char *target = "/tmp/target";
+    const char *filesystemtype = "tmpfs";
+    const char *mountflags = NULL;
+
+    // 创建源目录
+    if (mkdir(source, 0755) == -1) {
+        perror("mkdir source");
+        return 1;
+    }
+
+    // 创建目标目录
+    if (mkdir(target, 0755) == -1) {
+        perror("mkdir target");
+        return 1;
+    }
+
+    // 挂载 tmpfs 到 source
+    if (mount(source, target, filesystemtype, MS_BIND, NULL) == -1) {
+        perror("mount");
+        return 1;
+    }
+
+    printf("Successfully mounted %s to %s\n", source, target);
+
+    // 执行 move_mount 操作，模拟挂载点的变动
+    if (move_mount(target, source, 0) == -1) {
+        perror("move_mount");
+        return 1;
+    }
+
+    printf("Successfully moved mount from %s to %s\n", target, source);
+
+    // 清理资源
+    umount(target);
+    rmdir(target);
+    rmdir(source);
+
+    return 0;
+}
+</code>  
+<code name> test_case_move_mount.c </code name>  
+<compile cmd> gcc test_case_move_mount.c -o test_case_move_mount -lm </compile cmd>  

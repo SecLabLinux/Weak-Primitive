@@ -1,0 +1,44 @@
+<think process>  
+根据报错信息，存在两个主要问题：
+
+1. **隐式声明的函数 `unshare`**：
+   该错误提示说明 `unshare` 函数在使用时没有被声明。`unshare` 是在 `sched.h` 中声明的，正常情况下，包含该头文件应该足够。然而，由于编译器找不到其声明，可能需要手动检查 `sched.h` 是否被正确包含，或者是否有其他头文件遗漏。
+
+2. **`CLONE_NEWUSER` 未声明**：
+   `CLONE_NEWUSER` 是 `sched.h` 中定义的常量，用于创建新的用户命名空间。如果编译器无法识别该常量，说明需要确保相关的头文件（如 `sched.h`）已经正确包含，或者其他定义是否遗漏。
+
+因此，修复方案包括：
+- 确保正确包含 `sched.h` 头文件。
+- 确保 `unshare` 函数和 `CLONE_NEWUSER` 常量的定义在代码中正确引用。
+
+</think process>  
+<pkg install cmd>  
+libc6-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+#include <sched.h>
+#include <unistd.h>
+
+int main() {
+    // 使用 unshare 创建新的用户命名空间
+    if (unshare(CLONE_NEWUSER) == -1) {
+        perror("unshare");
+        return 1;
+    }
+
+    // 成功创建新的用户命名空间
+    printf("Created new user namespace\n");
+
+    // 继续执行其它操作，确保新的命名空间生效
+    // 此处可以添加更多逻辑以验证命名空间的创建和使用
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc test_case_create_user_ns.c -o test_case_create_user_ns  
+</compile cmd>  

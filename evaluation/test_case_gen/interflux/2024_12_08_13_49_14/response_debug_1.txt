@@ -1,0 +1,107 @@
+<think process>  
+从报错信息来看：`/bin/sh: 1: libnftnl-dev: not found`，表明在执行过程中，系统无法找到 `libnftnl-dev` 包。这并不是代码本身的错误，而是依赖包没有正确安装。
+
+尽管你已经提到已安装 `libnftnl-dev`，但这个报错说明系统无法找到这个包，可能是因为该包并未正确安装，或者系统的包管理器路径没有更新。因此，问题的关键是确保 `libnftnl-dev` 包正确安装并且可以被编译器找到。
+
+首先，执行以下命令来确保依赖包已正确安装，并且所有系统包都已更新：
+
+1. 检查并更新软件包列表：
+   ```bash
+   sudo apt update
+   ```
+
+2. 安装 `libnftnl-dev` 包：
+   ```bash
+   sudo apt install libnftnl-dev
+   ```
+
+如果 `libnftnl-dev` 已正确安装并且依然遇到问题，可能需要确认安装的库文件路径是否在 `gcc` 的搜索路径中。可以通过以下命令查看是否正确安装：
+
+```bash
+dpkg -s libnftnl-dev
+```
+
+如果 `dpkg` 显示安装信息，说明依赖已经安装。
+
+另外，如果你使用了特定的环境或配置，可能需要手动指定库文件路径和头文件路径。例如，通过 `-I` 和 `-L` 参数来指定头文件和库的路径。
+
+如果依赖已经安装并且库文件路径没有问题，接下来检查代码本身没有问题。
+
+关于代码本身，目前的 `test_case_pipapo_clone.c` 看起来是合适的，没有明显的语法错误。需要确保 `libnftnl-dev` 被正确加载。
+
+</think process>
+
+<pkg install cmd>  
+sudo apt update  
+sudo apt install libnftnl-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <string.h>  
+#include <nftnl/nftnl.h>  
+#include <nftnl/rule.h>  
+#include <nftnl/table.h>  
+#include <nftnl/chain.h>  
+#include <nftnl/expr.h>  
+
+int main() {  
+    struct nftnl_table *table;  
+    struct nftnl_chain *chain;  
+    struct nftnl_rule *rule;  
+    int fd;  
+
+    // 创建 nft 表  
+    table = nftnl_table_alloc();  
+    nftnl_table_set_family(table, NFPROTO_IPV4);  
+    nftnl_table_set_name(table, "test_table");  
+
+    fd = open("/proc/net/netfilter/nf_tables", O_RDWR);  
+    if (fd < 0) {  
+        perror("Failed to open nf_tables");  
+        return 1;  
+    }  
+
+    // 添加表  
+    if (nftnl_table_write(table, fd) < 0) {  
+        perror("Failed to add table");  
+        return 1;  
+    }  
+
+    // 创建链  
+    chain = nftnl_chain_alloc();  
+    nftnl_chain_set_table(chain, table);  
+    nftnl_chain_set_name(chain, "test_chain");  
+    if (nftnl_chain_write(chain, fd) < 0) {  
+        perror("Failed to add chain");  
+        return 1;  
+    }  
+
+    // 创建规则  
+    rule = nftnl_rule_alloc();  
+    nftnl_rule_set_chain(rule, chain);  
+    nftnl_rule_set_expr(rule, NULL);  // 可根据需要设置表达式  
+    if (nftnl_rule_write(rule, fd) < 0) {  
+        perror("Failed to add rule");  
+        return 1;  
+    }  
+
+    // 删除规则  
+    if (nftnl_rule_delete(rule, fd) < 0) {  
+        perror("Failed to delete rule");  
+        return 1;  
+    }  
+
+    close(fd);  
+    nftnl_rule_free(rule);  
+    nftnl_chain_free(chain);  
+    nftnl_table_free(table);  
+
+    return 0;  
+}  
+</code>
+
+<compile cmd>  
+gcc -lnftnl test_case_pipapo_clone.c -o test_case_pipapo_clone  
+</compile cmd>  

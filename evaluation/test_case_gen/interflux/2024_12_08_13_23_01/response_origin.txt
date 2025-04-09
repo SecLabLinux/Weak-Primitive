@@ -1,0 +1,86 @@
+<think process>  
+首先，我需要确保理解调用栈的结构，了解各个函数的作用。以下是调用栈的分解：
+
+1. **sctp_association_new**：这是栈的最底层函数，表明此时可能正在处理一个新的 SCTP（流控制传输协议）关联。它很可能在某些连接操作的开始被调用。
+
+2. **sctp_connect_new_asoc**：这个函数用于建立一个新的 SCTP 连接关联。它调用了 **__sctp_connect** 函数，该函数涉及到底层的连接建立。
+
+3. **__sctp_setsockopt_connectx** 和 **sctp_setsockopt_connectx_old**：这些函数表明连接的建立和配置可能需要进行特定的套接字选项设置。**getsockopt** 和 **setsockopt** 是用户空间与内核空间之间用于获取和设置套接字选项的系统调用。
+
+4. **sctp_connect** 和 **sctp_inet_connect**：这些函数与协议栈中的连接建立逻辑相关，涉及到套接字连接的具体实现。
+
+5. **sctp_sendmsg_new_asoc** 和 **sctp_sendmsg**：这些函数涉及数据发送，并可能在新建立的 SCTP 关联上发送消息。
+
+6. **sctp_unpack_cookie** 和后续的状态处理函数，如 **sctp_sf_do_5_1B_init** 等，表明在连接建立后，状态机可能需要进行某些状态切换或处理。
+
+从调用栈的整体结构来看，目标是通过用户空间代码来触发连接的建立，并触发这些函数的调用。用户空间程序可能需要执行连接相关的套接字操作，如 `connect()`，并可能设置套接字选项来激活相关功能。
+
+基于这些理解，下面的步骤是：
+1. 使用 `socket()` 创建一个 SCTP 套接字。
+2. 使用 `setsockopt()` 设置与连接建立相关的选项。
+3. 使用 `connect()` 发起连接，确保触发与关联创建相关的内核函数。
+
+接下来，我将编写一个简单的用户态程序，创建一个 SCTP 套接字，设置选项并发起连接请求。这个程序将触发内核中与连接和新关联创建相关的函数。
+
+</think process>  
+
+<pkg install cmd>  
+libssl-dev  
+</pkg install cmd>  
+
+<code>  
+#include <stdio.h>  
+#include <string.h>  
+#include <stdlib.h>  
+#include <sys/socket.h>  
+#include <netinet/in.h>  
+#include <netinet/sctp.h>  
+#include <arpa/inet.h>  
+
+int main() {  
+    int sock_fd;  
+    struct sockaddr_in servaddr;  
+    struct sctp_initmsg initmsg;  
+
+    // 创建 SCTP 套接字  
+    sock_fd = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);  
+    if (sock_fd < 0) {  
+        perror("socket failed");  
+        return -1;  
+    }  
+
+    // 设置初始化消息
+    memset(&initmsg, 0, sizeof(initmsg));  
+    initmsg.sinit_num_ostreams = 5;  
+    initmsg.sinit_max_instreams = 5;  
+    initmsg.sinit_max_attempts = 4;  
+
+    // 设置 SCTP 初始化选项  
+    if (setsockopt(sock_fd, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {  
+        perror("setsockopt failed");  
+        return -1;  
+    }  
+
+    // 设置服务器地址  
+    memset(&servaddr, 0, sizeof(servaddr));  
+    servaddr.sin_family = AF_INET;  
+    servaddr.sin_port = htons(9000);  
+    servaddr.sin_addr.s_addr = inet_addr("127.0.0.1");  
+
+    // 连接到服务器
+    if (connect(sock_fd, (struct sockaddr *)&servaddr, sizeof(servaddr)) < 0) {  
+        perror("connect failed");  
+        return -1;  
+    }  
+
+    printf("SCTP connection established\n");  
+    close(sock_fd);  
+    return 0;  
+}  
+</code>  
+
+<code name> test_case_sctp_connect.c </code name>  
+
+<compile cmd>  
+gcc -o test_case_sctp_connect test_case_sctp_connect.c -lsctp  
+</compile cmd>

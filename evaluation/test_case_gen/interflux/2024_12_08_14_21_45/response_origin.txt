@@ -1,0 +1,67 @@
+> 正在思考
+**创建测试案例**
+我正在制作一个用户空间的C程序，激活特定的Linux内核函数create_pid_namespace，沿着给定的调用栈逐步进行，讲解每一步的思考过程、安装命令、代码内容及编译命令。
+**了解函数细节**
+我正在学习创建一个用户空间的C程序，通过调用栈激活create_pid_namespace. 可能使用clone或unshare系统调用来创建新的PID命名空间。
+思考，持续 几秒
+
+<think process>
+为了触发内核函数 `create_pid_namespace`，需要创建一个新的 PID 命名空间。这可以通过调用 `unshare` 系统调用并传递 `CLONE_NEWPID` 标志来实现。`unshare(CLONE_NEWPID)` 会导致内核调用 `create_pid_namespace`，从而创建一个新的 PID 命名空间。编写一个简单的 C 程序，调用 `unshare` 并验证新的 PID 命名空间是否已成功创建，可以作为测试用例。
+</think process>
+<pkg install cmd>
+gcc
+</pkg install cmd>
+<code>
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#define STACK_SIZE (1024 * 1024)
+
+static char child_stack[STACK_SIZE];
+
+int child_func(void *arg) {
+    printf("In new PID namespace. PID: %ld\n", (long)getpid());
+    // Keep the child process alive to inspect the namespace
+    sleep(10);
+    return 0;
+}
+
+int main() {
+    printf("Parent PID: %ld\n", (long)getpid());
+
+    // Unshare the PID namespace
+    if (unshare(CLONE_NEWPID | CLONE_NEWTIME) == -1) {
+        perror("unshare");
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // In child process within the new PID namespace
+        printf("Child PID: %ld\n", (long)getpid());
+        execlp("/bin/bash", "/bin/bash", NULL);
+        perror("execlp");
+        exit(EXIT_FAILURE);
+    } else {
+        // In parent process
+        printf("Forked child PID: %d\n", pid);
+        wait(NULL);
+    }
+
+    return 0;
+}
+</code>
+<code name>
+test_case_create_pid_namespace.c
+</code name>
+<compile cmd>
+gcc test_case_create_pid_namespace.c -o test_case_create_pid_namespace
+</compile cmd>

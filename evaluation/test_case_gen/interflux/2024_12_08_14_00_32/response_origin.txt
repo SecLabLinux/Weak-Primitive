@@ -1,0 +1,82 @@
+<think process>  
+1. 根据调用栈，`sctp_transport_new` 是 SCTP 协议栈中创建新传输的核心函数。从栈信息来看，`sctp_transport_new` 主要被 `sctp_assoc_add_peer` 等函数调用，这些函数通常是在关联建立过程中调用的。我们可以看到，它们涉及到多种状态和事件处理，包括连接、参数处理、和重新连接等。
+
+2. 栈中有大量与“peer”和“association”（关联）相关的调用，表明我们的目标是通过建立 SCTP 连接来触发这些函数的执行。因此，我们的测试用例应该能够通过 `socket()` 系统调用创建一个 SCTP 套接字，之后建立连接。
+
+3. 为了准确触发 `sctp_transport_new`，我们的测试程序应当具备以下几个步骤：
+   - 创建一个 SCTP 套接字 (`socket()`)，并将其设置为 SCTP 协议。
+   - 调用 `connect()` 来启动连接过程。
+   - 在合适的条件下，确保连接能够完成，进而触发内核中的 SCTP 连接处理逻辑。
+
+4. 测试程序需要运行在 Linux 系统中，并且需要具备创建 SCTP 套接字和进行连接的权限。
+
+5. 此外，根据栈信息，有很多与 SCTP 状态和事件处理相关的调用（如 `sctp_sf_do_*`）。这些通常是状态机处理的环节，因此，通过正确的事件流触发相关函数也是测试的一部分。
+
+通过这些步骤，我们可以编写一个用户态程序，它能够触发 `sctp_transport_new`，从而测试 SCTP 协议栈的行为。
+
+</think process>
+
+<code> 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>
+
+#define SERVER_PORT 12345
+#define SERVER_IP "127.0.0.1"
+
+int main() {
+    int sock;
+    struct sockaddr_in server_addr;
+    struct sctp_initmsg initmsg;
+    
+    // 创建 SCTP 套接字
+    sock = socket(AF_INET, SOCK_STREAM, IPPROTO_SCTP);
+    if (sock < 0) {
+        perror("socket");
+        return 1;
+    }
+
+    // 设置服务器地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(SERVER_PORT);
+    server_addr.sin_addr.s_addr = inet_addr(SERVER_IP);
+
+    // 设置 SCTP 初始化消息
+    memset(&initmsg, 0, sizeof(initmsg));
+    initmsg.sinit_num_ostreams = 1;
+    initmsg.sinit_max_instreams = 1;
+    initmsg.sinit_max_attempts = 4;
+
+    // 设置套接字选项，启用 SCTP 初始化
+    if (setsockopt(sock, IPPROTO_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {
+        perror("setsockopt");
+        close(sock);
+        return 1;
+    }
+
+    // 建立连接，触发 SCTP 协议栈中的连接逻辑
+    if (connect(sock, (struct sockaddr *)&server_addr, sizeof(server_addr)) < 0) {
+        perror("connect");
+        close(sock);
+        return 1;
+    }
+
+    printf("SCTP connection established.\n");
+
+    // 保持连接，触发内核中的各种 SCTP 处理函数
+    sleep(10);
+
+    // 关闭套接字
+    close(sock);
+    return 0;
+}
+</code>
+
+<code name> test_case_sctp_transport_new.c </code name>
+
+<compile cmd> gcc -o test_case_sctp_transport_new test_case_sctp_transport_new.c </compile cmd>

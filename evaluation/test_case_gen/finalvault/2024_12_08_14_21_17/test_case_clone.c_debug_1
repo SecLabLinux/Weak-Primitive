@@ -1,0 +1,36 @@
+#define _GNU_SOURCE
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/wait.h>
+
+int child_func(void *arg) {
+    printf("Child process created\n");
+    return 0;
+}
+
+int main() {
+    const int stack_size = 1024 * 1024;
+    char *stack = malloc(stack_size);
+    if (stack == NULL) {
+        perror("malloc");
+        return 1;
+    }
+
+    // 使用 clone 系统调用创建一个新进程
+    int clone_flags = CLONE_VM | CLONE_FS | CLONE_FILES | CLONE_SIGHAND | CLONE_PARENT_SETTID | CLONE_CHILD_CLEARTID;
+    pid_t pid = clone(child_func, stack + stack_size, clone_flags, NULL);
+    
+    if (pid == -1) {
+        perror("clone");
+        free(stack);
+        return 1;
+    }
+
+    // 等待子进程结束
+    waitpid(pid, NULL, 0);
+    free(stack);
+    return 0;
+}

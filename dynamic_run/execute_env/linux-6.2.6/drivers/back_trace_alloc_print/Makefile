@@ -1,0 +1,1 @@
+obj-$(CONFIG_BACK_TRACE_ALLOC_PRINT) += back_trace_alloc_print.o

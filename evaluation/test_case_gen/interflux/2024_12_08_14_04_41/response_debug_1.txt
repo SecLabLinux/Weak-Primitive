@@ -1,0 +1,79 @@
+<think process>  
+从报错信息来看，错误的核心是无法找到 `libnfs-dev` 包。这可能是因为系统未正确安装或设置与 NFS 相关的开发库。在 Debian 系统中，包名应为 `libnfs4-dev` 而不是 `libnfs-dev`，这可能是安装命令的错误。此外，系统可能需要其他一些头文件或者库文件才能顺利编译与 NFS 相关的代码。
+
+首先，我们需要确保正确安装 `libnfs4-dev` 包。然后，需要确认与 NFS 相关的头文件路径在编译时被正确识别。
+
+同时，在代码方面，`nfs4_open` 和 `nfs4_read` 等函数在某些环境中可能有不同的签名或依赖。比如，在 NFS 客户端的实现中，这些函数的调用可能需要特定的参数类型或结构。
+
+步骤：
+1. 修改包安装命令。
+2. 检查代码中的 NFS 函数调用是否正确。
+3. 如果仍有问题，查看与 NFS 相关的开发文档，确保函数签名和参数正确。
+
+</think process>
+
+<pkg install cmd>  
+apt install libnfs4-dev  
+</pkg install cmd>
+
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <nfs/nfs4.h>
+#include <nfs/nfs.h>
+
+int main(int argc, char *argv[]) {
+    if (argc != 3) {
+        fprintf(stderr, "Usage: %s <server> <file>\n", argv[0]);
+        exit(EXIT_FAILURE);
+    }
+
+    const char *server = argv[1];
+    const char *filename = argv[2];
+
+    // 创建 NFS 客户端
+    struct nfs_client *clnt;
+    clnt = nfs_client_create(server, 2049, 0, 0);
+    if (clnt == NULL) {
+        perror("Failed to create NFS client");
+        exit(EXIT_FAILURE);
+    }
+
+    // 打开文件
+    nfsfh4 file_handle;
+    int result = nfs4_open(clnt, filename, O_RDONLY, &file_handle);
+    if (result != 0) {
+        fprintf(stderr, "Failed to open file: %s\n", filename);
+        nfs_client_destroy(clnt);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("File %s opened successfully\n", filename);
+
+    // 进行简单的读取操作
+    char buffer[1024];
+    result = nfs4_read(clnt, &file_handle, 0, 1024, buffer);
+    if (result < 0) {
+        fprintf(stderr, "Failed to read from file\n");
+        nfs4_close(clnt, &file_handle);
+        nfs_client_destroy(clnt);
+        exit(EXIT_FAILURE);
+    }
+
+    printf("Read %d bytes from file\n", result);
+
+    // 关闭文件
+    nfs4_close(clnt, &file_handle);
+
+    // 销毁客户端
+    nfs_client_destroy(clnt);
+
+    return 0;
+}
+</code>
+
+<compile cmd>  
+gcc -o test_case_rpc_alloc_task test_case_rpc_alloc_task.c -lnfs4 -lnfs  
+</compile cmd>

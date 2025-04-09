@@ -1,0 +1,22 @@
+#include <stdio.h>
+#include <stdlib.h>
+
+int main() {
+    // 创建一个虚拟网桥接口
+    system("ip link add name veth0 type veth peer name veth1");
+
+    // 激活接口
+    system("ip link set dev veth0 up");
+    system("ip link set dev veth1 up");
+
+    // 使用 tc 创建并配置默认的队列调度器
+    system("tc qdisc add dev veth0 root handle 1: htb default 12");
+
+    // 配置一个简单的队列调度器
+    system("tc class add dev veth0 parent 1: classid 1:1 htb rate 10mbit");
+
+    // 验证队列调度器是否已被配置
+    system("tc -s qdisc show dev veth0");
+
+    return 0;
+}

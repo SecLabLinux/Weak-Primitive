@@ -1,0 +1,73 @@
+<think process>
+错误提示 `gcc: error: unrecognized command-line option ‘-y’` 和 `gcc: fatal error: no input files` 指出两个问题：
+
+1. **不识别命令行选项 `-y`**：这表明在编译命令中可能出现了无效的选项或参数。查看报错中的 `-y` 是一个不被 `gcc` 识别的选项，可能是错误地输入了一个命令选项，或者是编译过程中错误地加上了这个参数。
+
+2. **没有输入文件**：编译命令没有指定源代码文件。通常是因为编译命令在文件名部分出现了错误，或者文件路径不正确。
+
+分析认为错误的原因在于编译命令的参数可能丢失或者出现误操作，因此需要检查和修复编译命令，确保正确指定源文件。
+
+解决方案：
+1. 检查并确保编译命令正确。
+2. 确认 `test_case_create_pid_namespace.c` 文件存在，并且路径正确。
+3. 修正编译命令，去除无效选项，并确保源代码文件路径正确。
+
+修改后的编译命令应该为 `gcc test_case_create_pid_namespace.c -o test_case_create_pid_namespace`，这会将源代码编译成可执行文件。
+</think process>
+
+<pkg install cmd>
+gcc
+</pkg install cmd>
+
+<code>
+#include <sched.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/wait.h>
+
+#define STACK_SIZE (1024 * 1024)
+
+static char child_stack[STACK_SIZE];
+
+int child_func(void *arg) {
+    printf("In new PID namespace. PID: %ld\n", (long)getpid());
+    // Keep the child process alive to inspect the namespace
+    sleep(10);
+    return 0;
+}
+
+int main() {
+    printf("Parent PID: %ld\n", (long)getpid());
+
+    // Unshare the PID namespace
+    if (unshare(CLONE_NEWPID | CLONE_NEWTIME) == -1) {
+        perror("unshare");
+        exit(EXIT_FAILURE);
+    }
+
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork");
+        exit(EXIT_FAILURE);
+    }
+
+    if (pid == 0) {
+        // In child process within the new PID namespace
+        printf("Child PID: %ld\n", (long)getpid());
+        execlp("/bin/bash", "/bin/bash", NULL);
+        perror("execlp");
+        exit(EXIT_FAILURE);
+    } else {
+        // In parent process
+        printf("Forked child PID: %d\n", pid);
+        wait(NULL);
+    }
+
+    return 0;
+}
+</code>
+
+<compile cmd>
+gcc test_case_create_pid_namespace.c -o test_case_create_pid_namespace
+</compile cmd>

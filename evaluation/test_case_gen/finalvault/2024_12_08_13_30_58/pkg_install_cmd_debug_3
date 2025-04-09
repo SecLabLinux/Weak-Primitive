@@ -1,0 +1,2 @@
+apt update  
+apt install libgssapi-krb5-2 libkrb5-dev build-essential

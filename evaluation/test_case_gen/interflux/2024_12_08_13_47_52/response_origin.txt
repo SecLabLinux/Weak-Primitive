@@ -1,0 +1,93 @@
+<think process>  
+在这个任务中，我们的目标是构建一个用户态程序，以便能够触发内核函数 `sctp_chunkify` 的调用。在给定的调用栈中，我们可以看到 `sctp_chunkify` 函数是由 `_sctp_make_chunk` 调用的，而 `_sctp_make_chunk` 又是通过 `sctp_make_control` 这样的更上层函数调用的。
+
+从调用栈分析中可以推测，`sctp_chunkify` 是在某些特定的 SCTP（Stream Control Transmission Protocol）处理过程中被调用。特别是在处理数据包碎片、重组和控制消息时，SCTP 的处理链会调用到该函数。因此，用户态程序需要模拟发送 SCTP 数据包，或者触发相关的 SCTP 控制操作。
+
+为了触发这个函数，我们可以通过：
+1. 使用 `socket()` 函数创建一个 SCTP 套接字。
+2. 使用 `setsockopt()` 设置相关的选项，以确保 SCTP 协议栈按预期工作。
+3. 发送 SCTP 数据包或控制消息，以触发内核的 SCTP 处理过程。
+
+我们可以通过模拟一个发送 SCTP 数据包的过程来让内核调用到 `sctp_chunkify`。通过 `sendmsg()` 或 `sendto()` 发送一个 SCTP 数据包，应该能触发该函数。
+
+对于测试用例，我们将重点在于模拟发送 SCTP 数据包，通过 `sendmsg()` 函数来发送数据，触发 `sctp_chunkify` 函数。
+
+**重点：**
+- `sctp_make_control`、`sctp_make_abort` 等函数表明在发送消息时涉及到控制信息的构建。
+- 使用 SCTP 套接字可以模拟发送控制信息，并且可以通过 `setsockopt()` 设置特定的选项，帮助我们控制数据包的发送。
+
+基于上述分析，我将编写一个简单的用户态程序，通过创建 SCTP 套接字，并发送一条数据包来触发 `sctp_chunkify`。  
+
+</think process>  
+<pkg install cmd>  
+libssl-dev  
+libsctp-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/sctp.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+
+#define SERVER_ADDR "127.0.0.1"
+#define SERVER_PORT 9899
+
+int main() {
+    int sockfd;
+    struct sockaddr_in server_addr;
+    struct sctp_sndrcvinfo sndrcv_info;
+    struct sctp_initmsg initmsg;
+    char buffer[1024] = "Hello, SCTP!";
+
+    // 创建 SCTP 套接字
+    sockfd = socket(AF_INET, SOCK_SEQPACKET, IPPROTO_SCTP);
+    if (sockfd < 0) {
+        perror("socket creation failed");
+        return 1;
+    }
+
+    // 配置目标服务器地址
+    memset(&server_addr, 0, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(SERVER_PORT);
+    inet_pton(AF_INET, SERVER_ADDR, &server_addr.sin_addr);
+
+    // 设置 SCTP 初始化选项
+    memset(&initmsg, 0, sizeof(initmsg));
+    initmsg.sinit_num_ostreams = 5;
+    initmsg.sinit_max_instreams = 5;
+    initmsg.sinit_max_attempts = 4;
+
+    if (setsockopt(sockfd, SOL_SCTP, SCTP_INITMSG, &initmsg, sizeof(initmsg)) < 0) {
+        perror("setsockopt SCTP_INITMSG failed");
+        close(sockfd);
+        return 1;
+    }
+
+    // 配置消息发送信息
+    memset(&sndrcv_info, 0, sizeof(sndrcv_info));
+    sndrcv_info.sinfo_stream = 0;
+    sndrcv_info.sinfo_flags = SCTP_EOF;  // 发送结束标志
+
+    // 发送 SCTP 数据包
+    if (sctp_sendmsg(sockfd, buffer, strlen(buffer), (struct sockaddr *)&server_addr, sizeof(server_addr), 0, 0, sndrcv_info.sinfo_stream, 0, 0) < 0) {
+        perror("sctp_sendmsg failed");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Message sent successfully.\n");
+
+    // 关闭套接字
+    close(sockfd);
+    return 0;
+}
+</code>  
+<code name> test_case_sctp_chunkify.c </code name>  
+<compile cmd>  
+gcc -o test_case_sctp_chunkify test_case_sctp_chunkify.c -lsctp -lssl -lcrypto  
+</compile cmd>

@@ -1,0 +1,48 @@
+<think process>  
+首先，`create_user_ns` 是 Linux 内核中的一个函数，它用于创建一个新的用户命名空间（user namespace）。在内核代码的调用栈中，`create_user_ns` 是由 `copy_creds` 和 `copy_process` 调用的，后者会触发创建一个新的进程。为了使内核调用到 `create_user_ns`，我们需要创建一个能够引发进程创建的场景，且该场景必须创建一个新的用户命名空间。  
+分析调用栈，我们看到 `create_user_ns` 是由 `copy_creds` 和 `copy_process` 调用的，通常这些函数与进程创建和用户空间操作有关。最可能触发此函数的是通过系统调用如 `clone`，`fork`，或 `unshare` 等。  
+通过使用 `unshare` 系统调用创建一个新的用户命名空间是一个直接的方式，因此在用户空间代码中调用 `unshare` 来触发 `create_user_ns` 是合理的。  
+由于调用栈中的 `unshare_userns` 和 `ksys_unshare` 显示了 `unshare` 与用户命名空间创建的关联，因此通过调用 `unshare` 来触发该函数是合适的。
+
+我们可以编写一个简单的用户态程序，利用 `unshare` 创建一个新的用户命名空间，并观察内核调用栈中的 `create_user_ns` 被触发。
+
+此用户程序将调用 `unshare(CLONE_NEWUSER)` 来创建一个新的用户命名空间，从而触发 `create_user_ns`。
+
+</think process>  
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sched.h>
+
+int main() {
+    // 使用 unshare 创建一个新的用户命名空间
+    if (unshare(CLONE_NEWUSER) == -1) {
+        perror("unshare failed");
+        return 1;
+    }
+
+    printf("Successfully created a new user namespace.\n");
+
+    // 在新的命名空间中创建一个子进程
+    pid_t pid = fork();
+    if (pid == -1) {
+        perror("fork failed");
+        return 1;
+    }
+
+    if (pid == 0) {
+        // 子进程可以在新的用户命名空间中执行
+        printf("Child process in the new user namespace.\n");
+    } else {
+        // 父进程
+        printf("Parent process.\n");
+    }
+
+    return 0;
+}
+</code>  
+<code name> test_case_create_user_ns.c </code name>  
+<compile cmd> gcc test_case_create_user_ns.c -o test_case_create_user_ns </compile cmd>  

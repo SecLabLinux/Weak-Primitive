@@ -1,0 +1,73 @@
+<think process>  
+根据调用栈分析，`fanotify_add_new_mark` 是 Linux 内核中与 Fanotify 系统相关的函数，通常用于监控文件系统事件。它的调用路径从 `sys_fanotify_mark` 开始，最终通过 `fanotify_add_mark` 调用 `fanotify_add_new_mark`。`fanotify_add_mark` 是用户空间与内核空间交互的接口之一，负责向内核注册新的监控标记（mark），并执行相应的处理。
+
+从调用栈中，我们看到的是从用户态通过 `sys_fanotify_mark` 发起的系统调用路径。这个路径最终会导致内核调用 `fanotify_add_new_mark`。
+
+### 用户态程序目标
+用户态程序的目标是触发 `fanotify_add_new_mark` 调用，通常这是通过调用 `fanotify` 的相关系统调用来实现的。具体来说，我们可以利用 `fanotify` 系统提供的接口，通过 `fanotify_mark` 来创建新的监控标记。我们需要通过 `fanotify_mark` 来注册一个监控事件，从而触发内核内部的 `fanotify_add_new_mark` 函数。
+
+### 关键点：
+- `fanotify` 是一种用于监控文件系统事件的机制。
+- 调用 `fanotify_mark` 以触发内核对某个目录或文件的监控。
+- `sys_fanotify_mark` 是用户空间与内核空间交互的系统调用。
+
+### 用户态程序实现
+1. 我们首先需要打开一个目录或文件，这样 `fanotify_mark` 可以作用于该对象。
+2. 然后，通过 `fanotify_mark` 系统调用注册监控标记，指定希望监控的事件类型，如 `FAN_ACCESS`（访问）或 `FAN_MODIFY`（修改）。
+3. 当文件或目录发生相应事件时，内核会触发相关的回调，并最终调用 `fanotify_add_new_mark`。
+
+通过这种方式，用户态程序可以通过 `fanotify_mark` 触发内核内部的 `fanotify_add_new_mark` 调用。
+
+<pkg install cmd>  
+libc6-dev
+
+<code>  
+#include <stdio.h>  
+#include <stdlib.h>  
+#include <sys/types.h>  
+#include <sys/stat.h>  
+#include <fcntl.h>  
+#include <unistd.h>  
+#include <sys/fanotify.h>  
+#include <errno.h>  
+
+int main() {  
+    int fan_fd, mark;  
+    struct fanotify_event_metadata event_metadata;  
+
+    // 创建 fanotify 文件描述符
+    fan_fd = fanotify_init(FAN_CLASSIFY | FAN_NONBLOCK, O_RDONLY);  
+    if (fan_fd == -1) {  
+        perror("fanotify_init failed");  
+        return -1;  
+    }  
+
+    // 设置文件监控标记，监控文件夹的访问事件
+    mark = fanotify_mark(fan_fd, FAN_MARK_ADD, FAN_ACCESS, AT_FDCWD, "/tmp");  
+    if (mark == -1) {  
+        perror("fanotify_mark failed");  
+        close(fan_fd);  
+        return -1;  
+    }  
+
+    printf("Fanotify mark successfully added.\n");  
+
+    // 监听事件
+    while (1) {  
+        ssize_t len = read(fan_fd, &event_metadata, sizeof(event_metadata));  
+        if (len == -1) {  
+            perror("read failed");  
+            break;  
+        }  
+        if (len == 0) continue;  
+        printf("Event received: %x\n", event_metadata.mask);  
+    }  
+
+    close(fan_fd);  
+    return 0;  
+}  
+<code name> test_case_fanotify_mark.c </code name>
+
+<compile cmd>  
+gcc test_case_fanotify_mark.c -o test_case_fanotify_mark -lfanotify -Wall  
+</compile cmd>

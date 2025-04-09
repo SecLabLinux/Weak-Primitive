@@ -1,0 +1,59 @@
+<think process>  
+要使内核调用 `unix_create_addr` 函数，首先需要通过 UNIX 域套接字与内核交互。`unix_create_addr` 是一个用于处理 UNIX 域套接字地址的内部函数，它通常被用于绑定（`bind`）操作中。根据提供的调用栈，`unix_create_addr` 是在 `unix_bind_abstract` 和 `unix_bind` 等函数中调用的，因此要触发这个函数，需要使用套接字并调用 `bind`。  
+
+我们将使用一个简单的 C 程序，它创建一个 UNIX 域套接字，并调用 `bind` 函数来模拟内核中的这一过程。  
+步骤：  
+1. 使用 `socket(AF_UNIX, SOCK_STREAM, 0)` 创建一个 UNIX 域套接字。
+2. 构造一个有效的套接字地址（使用 `sockaddr_un` 结构）。
+3. 调用 `bind` 来绑定该套接字地址。  
+这应该会触发内核中的 `unix_create_addr` 调用栈。  
+注意：UNIX 域套接字的地址（`sockaddr_un`）通常是一个文件路径，可以是抽象地址（以 `\0` 开头）或文件系统上的具体路径。为了触发 `unix_create_addr`，我们将使用抽象地址。
+
+这样就能确保调用路径经过 `unix_create_addr`。  
+
+<pkg install cmd>  
+</pkg install cmd>  
+
+<code>  
+#include <stdio.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <unistd.h>
+
+#define SOCKET_PATH "\0test_socket"  // 使用抽象地址，前面加 '\0'
+
+int main() {
+    int sockfd;
+    struct sockaddr_un addr;
+
+    // 创建 UNIX 域套接字
+    sockfd = socket(AF_UNIX, SOCK_STREAM, 0);
+    if (sockfd == -1) {
+        perror("socket");
+        return 1;
+    }
+
+    // 配置套接字地址
+    addr.sun_family = AF_UNIX;
+    strncpy(addr.sun_path, SOCKET_PATH, sizeof(addr.sun_path) - 1);  // 使用抽象地址
+
+    // 绑定套接字
+    if (bind(sockfd, (struct sockaddr*)&addr, sizeof(addr)) == -1) {
+        perror("bind");
+        close(sockfd);
+        return 1;
+    }
+
+    printf("Socket bound to %s\n", SOCKET_PATH);
+
+    // 关闭套接字
+    close(sockfd);
+    return 0;
+}
+</code>  
+
+<code name> test_case_unix_create_addr.c </code name>  
+
+<compile cmd>  
+gcc test_case_unix_create_addr.c -o test_case_unix_create_addr  
+</compile cmd>  

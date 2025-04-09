@@ -1,0 +1,49 @@
+<think process>  
+错误信息显示 `fatal error: sys/firmware.h: No such file or directory`，这表明系统无法找到头文件 `sys/firmware.h`。这个头文件在标准用户空间环境中通常不可用，尤其是在没有安装相应的固件加载库时。
+
+### 分析：
+1. **头文件缺失**：`sys/firmware.h` 不是标准的系统头文件，它在特定的内核接口或者固件库中提供。在用户空间程序中，正确的方式是依赖用户空间 API，而不是直接使用内核的固件加载接口。
+2. **固件加载 API**：在用户空间中，固件加载通常是通过 `request_firmware()` 函数来实现的，实际上它来自于 `linux/firmware.h`，但是该头文件也仅仅在内核模块开发时可用，而在用户空间是无法直接使用的。
+
+### 解决方案：
+- **替代方案**：避免使用内核头文件 `sys/firmware.h`。在用户空间，固件加载可以通过合适的库来实现，通常是通过调用 `request_firmware()` 等 API，而这些函数通常由某些库提供。我们可以避免直接依赖内核头文件。
+
+### 修改建议：
+- 移除对 `sys/firmware.h` 的引用，改用标准的用户空间 API。
+
+</think process>  
+<pkg install cmd>  
+apt install libfirmware-dev  
+</pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <linux/firmware.h>
+
+int main() {
+    const char *firmware_name = "non_existent_firmware.bin"; // 固件名称，可以是任何名称
+    const struct firmware *fw = NULL;
+    
+    // 请求固件
+    int ret = request_firmware(&fw, firmware_name, "/lib/firmware");
+    if (ret != 0) {
+        printf("Failed to request firmware: %d\n", ret);
+        return -1;
+    }
+
+    printf("Firmware loaded successfully.\n");
+
+    // 在这里我们可以触发内核函数
+    release_firmware(fw);  // 释放固件资源
+
+    return 0;
+}
+</code>  
+<compile cmd>  
+gcc -o test_case_prepare_kernel_cred test_case_prepare_kernel_cred.c -l firmware -lm  
+</compile cmd>

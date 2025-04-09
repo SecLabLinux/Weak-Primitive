@@ -1,0 +1,60 @@
+<think process>  
+根据调用栈中的信息，`pde_free` 函数涉及到的是内核中的 `proc` 文件系统相关的操作，尤其是在 `proc_create` 和 `proc_mkdir` 相关函数的调用路径中。可以推测出，`pde_free` 函数的调用是在释放由 `proc_create` 或 `proc_mkdir` 创建的 `proc` 目录项时触发的。
+
+在此之前，涉及到多个 `proc` 目录项创建的操作。为了测试内核调用到 `pde_free` 函数，我们需要编写一个用户态程序，它能够创建一个 `proc` 目录项，并且在执行过程中触发对该目录项的删除。这样做可以确保内核会调用 `pde_free` 进行清理。
+
+我们的目标是通过用户态程序创建一个 `proc` 目录项，执行一定的操作（如删除该目录项），并触发内核中相应的清理机制。
+
+测试步骤如下：
+1. 使用 `proc_create` 或类似接口创建一个 `proc` 目录项。
+2. 模拟对该目录项的删除。
+3. 观察内核是否调用 `pde_free` 函数来释放该目录项。
+
+内核中与 `pde_free` 相关的操作通常在删除 `proc` 文件系统条目时发生，因此我们可以通过删除自己创建的 `proc` 条目来触发这一过程。
+
+为了确保测试的有效性，程序将按照以下顺序执行：
+- 创建一个 `proc` 文件。
+- 向该文件写入数据（模拟文件操作）。
+- 删除该 `proc` 文件以触发 `pde_free` 的调用。
+
+</think process>  
+<pkg install cmd>  
+<pkg install cmd>  
+<code>  
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <errno.h>
+#include <string.h>
+
+#define PROC_ENTRY "/proc/test_pde_free"
+
+int main() {
+    // 创建一个 proc 文件
+    FILE *fp = fopen(PROC_ENTRY, "w");
+    if (fp == NULL) {
+        perror("Failed to create proc file");
+        return 1;
+    }
+    fprintf(fp, "This is a test for pde_free function.\n");
+    fclose(fp);
+
+    // 等待一段时间，确保内核有时间处理 proc 条目
+    sleep(1);
+
+    // 删除 proc 文件，以触发 pde_free 的调用
+    if (remove(PROC_ENTRY) != 0) {
+        perror("Failed to remove proc file");
+        return 1;
+    }
+
+    printf("Proc file '%s' removed successfully.\n", PROC_ENTRY);
+
+    return 0;
+}
+</code>  
+<code name> test_case_pde_free.c </code name>  
+<compile cmd> gcc -o test_case_pde_free test_case_pde_free.c </compile cmd>  
